@@ -187,7 +187,7 @@ curl -X GET http://localhost:8000/api/v1/loyalty/points/1 \
 
 ### 4.2 External Service Integration
 
-#### WhatsApp Integration Test
+#### WhatsApp Integration Test (Optional)
 ```bash
 curl -X POST http://localhost:8000/api/v1/whatsapp/send \
   -H "Content-Type: application/json" \
@@ -199,15 +199,21 @@ curl -X POST http://localhost:8000/api/v1/whatsapp/send \
   }'
 ```
 
-#### ERP Integration Test
+#### Logic ERP Integration Test
 ```bash
-curl -X POST http://localhost:8000/api/v1/erp/sync \
+# Test ERP connection
+curl http://localhost:8000/api/v1/erp/test-connection \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+
+# Sync customers from Logic ERP
+curl -X POST http://localhost:8000/api/v1/erp/sync/customers \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
-  -d '{
-    "sync_type": "customers",
-    "since": "2024-01-01T00:00:00Z"
-  }'
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+
+# Sync sales orders from Logic ERP
+curl -X POST http://localhost:8000/api/v1/erp/sync/sales \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
 ```
 
 ## 5. Performance Testing
@@ -397,7 +403,34 @@ curl -X POST http://localhost:8000/api/v1/erp/sync \
    - Check authentication requirements
    - Validate error responses
 
-### 10.2 Code Documentation
+### 10.2 Logic ERP Integration Testing
+
+1. **Test ERP Data Sync:**
+   ```bash
+   # Test connection to Logic ERP
+   curl http://localhost:8000/api/v1/erp/test-connection \
+     -H "Authorization: Bearer YOUR_TOKEN_HERE"
+
+   # Sync customers from Logic ERP
+   curl -X POST http://localhost:8000/api/v1/erp/sync/customers \
+     -H "Authorization: Bearer YOUR_TOKEN_HERE"
+
+   # Sync sales orders from Logic ERP
+   curl -X POST http://localhost:8000/api/v1/erp/sync/sales \
+     -H "Authorization: Bearer YOUR_TOKEN_HERE"
+   ```
+
+2. **Verify Data Transformation:**
+   - Check that customer data is properly transformed
+   - Verify sales orders create loyalty transactions
+   - Ensure tier upgrades work correctly
+
+3. **Test Incremental Sync:**
+   - Make changes in Logic ERP
+   - Run sync again
+   - Verify only changed records are updated
+
+### 10.3 Code Documentation
 
 1. **Check docstrings:**
    ```python

@@ -14,6 +14,11 @@ RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     curl \
+    unixodbc \
+    unixodbc-dev \
+    freetds-dev \
+    freetds-bin \
+    tdsodbc \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies

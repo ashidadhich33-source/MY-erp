@@ -8,6 +8,7 @@ pydantic-settings==2.1.0
 sqlalchemy==2.0.23
 alembic==1.12.1
 psycopg2-binary==2.9.7
+pyodbc==4.0.39
 
 # Authentication
 python-jose[cryptography]==3.3.0

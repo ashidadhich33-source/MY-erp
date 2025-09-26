@@ -177,10 +177,13 @@ Access monitoring dashboards:
 2. Generate access token
 3. Configure webhook URL: `https://yourdomain.com/api/v1/whatsapp/webhook`
 
-**ERP Integration:**
-1. Configure ERP connection settings
-2. Set up API keys and endpoints
-3. Test data synchronization
+**Logic ERP Integration:**
+1. Ensure Logic ERP MSSQL is accessible (username: sa, password: ATPL@123)
+2. Verify the following tables exist:
+   - Customers (CustomerID, CustomerName, EmailAddress, PhoneNumber, Status)
+   - SalesOrders (OrderID, CustomerID, OrderDate, TotalAmount, PaymentStatus)
+   - Products (ProductID, ProductName)
+3. Test data synchronization from MSSQL to PostgreSQL
 
 ## 🧪 Production Testing
 

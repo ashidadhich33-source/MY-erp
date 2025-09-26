@@ -1,6 +1,6 @@
 # Loyalty & Affiliate Management System
 
-A comprehensive loyalty program and affiliate management system with WhatsApp integration and ERP connectivity, built with FastAPI, React, and PostgreSQL.
+A comprehensive loyalty program and affiliate management system with WhatsApp integration and Logic ERP connectivity, built with FastAPI, React, PostgreSQL (loyalty system), and MSSQL (Logic ERP data source).
 
 ## 🚀 Features
 
@@ -9,7 +9,7 @@ A comprehensive loyalty program and affiliate management system with WhatsApp in
 - **Loyalty Program**: Points-based rewards system with customizable tiers
 - **Affiliate System**: Referral tracking, commission management, and performance analytics
 - **WhatsApp Integration**: Automated messaging, templates, and delivery tracking
-- **ERP Integration**: Seamless integration with Logic ERP for data synchronization
+- **Logic ERP Integration**: Seamless data synchronization from Logic ERP MSSQL (Customers, SalesOrders, Products) to PostgreSQL loyalty system
 - **Analytics & Reporting**: Comprehensive dashboards and custom report generation
 
 ### Technical Features
@@ -25,7 +25,8 @@ A comprehensive loyalty program and affiliate management system with WhatsApp in
 - Docker and Docker Compose
 - Python 3.11+ (for development)
 - Node.js 18+ (for development)
-- PostgreSQL 15+ (for production)
+- PostgreSQL 15+ (for loyalty system database)
+- Microsoft SQL Server (for Logic ERP data source)
 - Redis 7+ (for caching and sessions)
 
 ## 🛠️ Quick Start
@@ -136,11 +137,15 @@ DATABASE_URL=postgresql://user:password@localhost:5432/loyalty_db
 SECRET_KEY=your-super-secret-key
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
-# ERP Integration
-ERP_HOST=your-erp-host.com
-ERP_API_KEY=your-erp-api-key
+# Logic ERP Integration (MSSQL)
+ERP_HOST=erp_db
+ERP_PORT=1433
+ERP_DATABASE=master
+ERP_USERNAME=sa
+ERP_PASSWORD=ATPL@123
+ERP_DRIVER=ODBC Driver 17 for SQL Server
 
-# WhatsApp
+# WhatsApp Integration (optional)
 WHATSAPP_ACCESS_TOKEN=your-whatsapp-token
 
 # Email
@@ -249,15 +254,16 @@ docker-compose up -d --scale frontend=2
 
 ```
 loyalty-affiliate-system/
-├── backend/                 # FastAPI backend
-│   ├── app/                # Main application
+├── backend/                 # FastAPI backend (PostgreSQL)
+│   ├── app/                # Main application with Logic ERP integration
 │   ├── tests/              # Test files
-│   └── requirements.txt    # Python dependencies
+│   └── requirements.txt    # Python dependencies (includes pyodbc)
 ├── frontend/               # React frontend
 │   ├── src/               # Source code
 │   └── package.json       # Node dependencies
 ├── monitoring/             # Monitoring configuration
-├── docker-compose.yml      # Production deployment
+├── docker-compose.yml      # Multi-database deployment (PostgreSQL + MSSQL)
+├── erp_db/                 # Logic ERP MSSQL data (mounted volume)
 └── deploy.sh              # Deployment script
 ```
 

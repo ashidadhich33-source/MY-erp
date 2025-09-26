@@ -41,6 +41,7 @@ def upgrade() -> None:
     op.create_table('customers',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('erp_id', sa.String(length=100), nullable=True),  # Logic ERP CustomerID
         sa.Column('tier', sa.Enum('bronze', 'silver', 'gold', 'platinum', name='customertier'), nullable=False),
         sa.Column('total_points', sa.Integer(), nullable=False),
         sa.Column('lifetime_points', sa.Integer(), nullable=False),
@@ -49,12 +50,16 @@ def upgrade() -> None:
         sa.Column('status', sa.Enum('active', 'inactive', 'suspended', name='customerstatus'), nullable=False),
         sa.Column('joined_date', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('last_activity', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
+        sa.Column('last_sync', sa.DateTime(timezone=True), nullable=True),  # Last sync with Logic ERP
+        sa.Column('data_hash', sa.String(length=64), nullable=True),  # Hash for change detection
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_customers_id'), 'customers', ['id'], unique=False)
+    op.create_index(op.f('ix_customers_erp_id'), 'customers', ['erp_id'], unique=False)
+    op.create_index(op.f('ix_customers_user_id'), 'customers', ['user_id'], unique=False)
 
     # Create customer_kids table
     op.create_table('customer_kids',
@@ -93,6 +98,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('customer_id', sa.Integer(), nullable=False),
+        sa.Column('erp_sale_id', sa.String(length=100), nullable=True),  # Logic ERP OrderID
         sa.Column('points', sa.Integer(), nullable=False),
         sa.Column('transaction_type', sa.Enum('earned', 'redeemed', 'expired', 'adjustment', 'transfer', name='transactiontype'), nullable=False),
         sa.Column('source', sa.Enum('purchase', 'referral', 'birthday', 'promotion', 'manual', 'system', name='transactionsource'), nullable=False),
@@ -110,6 +116,7 @@ def upgrade() -> None:
     op.create_index('ix_loyalty_transactions_source', 'loyalty_transactions', ['source'], unique=False)
     op.create_index('ix_loyalty_transactions_transaction_type', 'loyalty_transactions', ['transaction_type'], unique=False)
     op.create_index('ix_loyalty_transactions_user_customer', 'loyalty_transactions', ['user_id', 'customer_id'], unique=False)
+    op.create_index('ix_loyalty_transactions_erp_sale_id', 'loyalty_transactions', ['erp_sale_id'], unique=False)
 
     # Create rewards table
     op.create_table('rewards',
