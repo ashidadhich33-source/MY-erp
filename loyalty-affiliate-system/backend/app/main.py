@@ -25,14 +25,26 @@ app = FastAPI(
 )
 
 # Set up CORS middleware
+# Allow all origins in development, restrict in production
 if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # Production: Use configured origins
+    cors_origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS]
+else:
+    # Development: Allow common development origins
+    cors_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173"
+    ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)

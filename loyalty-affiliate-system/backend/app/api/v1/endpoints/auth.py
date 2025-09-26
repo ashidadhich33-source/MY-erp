@@ -47,8 +47,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 @router.post("/register", response_model=UserResponse, summary="Register new user")
@@ -89,10 +88,17 @@ async def login(
     - **username**: User email address
     - **password**: User password
     """
-    # For now, we'll use mock authentication
-    # In Phase 3, this will be replaced with actual database authentication
+    # TODO: Replace with actual database authentication
+    # For now, we'll use environment variables for demo credentials
+    # In production, this should be replaced with proper database authentication
 
-    if form_data.username == "admin@example.com" and form_data.password == "admin123":
+    import os
+
+    # Check for demo admin credentials from environment variables
+    demo_admin_email = os.getenv("DEMO_ADMIN_EMAIL", "admin@example.com")
+    demo_admin_password = os.getenv("DEMO_ADMIN_PASSWORD", "demo_admin_123")
+
+    if form_data.username == demo_admin_email and form_data.password == demo_admin_password:
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             subject="1", expires_delta=access_token_expires
@@ -105,8 +111,11 @@ async def login(
             token_type="bearer"
         )
 
-    # Mock user for testing
-    if form_data.username == "user@example.com" and form_data.password == "user123":
+    # Check for demo user credentials from environment variables
+    demo_user_email = os.getenv("DEMO_USER_EMAIL", "user@example.com")
+    demo_user_password = os.getenv("DEMO_USER_PASSWORD", "demo_user_123")
+
+    if form_data.username == demo_user_email and form_data.password == demo_user_password:
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             subject="2", expires_delta=access_token_expires
