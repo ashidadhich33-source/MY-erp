@@ -1,0 +1,32 @@
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.App {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.page-exit {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.page-exit-active {
+  opacity: 0;
+  transform: translateX(-20px);
+  transition: opacity 300ms, transform 300ms;
+}
