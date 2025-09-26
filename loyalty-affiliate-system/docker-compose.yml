@@ -9,20 +9,21 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=mssql+pyodbc://loyalty_user:loyalty_password@db:1433/loyalty_db?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=postgresql://loyalty_user:loyalty_password@db:5432/loyalty_db
       - REDIS_URL=redis://redis:6379
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
       - API_HOST=0.0.0.0
       - API_PORT=8000
-      # ERP Integration (optional)
-      - ERP_HOST=${ERP_HOST}
-      - ERP_PORT=${ERP_PORT:-8080}
-      - ERP_DATABASE=${ERP_DATABASE}
-      - ERP_USERNAME=${ERP_USERNAME}
-      - ERP_PASSWORD=${ERP_PASSWORD}
+      # Logic ERP Integration (MSSQL)
+      - ERP_HOST=erp_db
+      - ERP_PORT=1433
+      - ERP_DATABASE=master
+      - ERP_USERNAME=sa
+      - ERP_PASSWORD=ATPL@123
       - ERP_API_KEY=${ERP_API_KEY}
+      - ERP_DRIVER=ODBC Driver 17 for SQL Server
       # WhatsApp Integration (optional)
       - WHATSAPP_API_URL=${WHATSAPP_API_URL}
       - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
@@ -74,8 +75,27 @@ services:
       retries: 3
       start_period: 30s
 
-  # Microsoft SQL Server database
+  # PostgreSQL database (Loyalty System)
   db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=loyalty_db
+      - POSTGRES_USER=loyalty_user
+      - POSTGRES_PASSWORD=loyalty_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loyalty_user -d loyalty_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Microsoft SQL Server (Logic ERP)
+  erp_db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       - ACCEPT_EULA=Y
@@ -84,8 +104,7 @@ services:
     ports:
       - "1433:1433"
     volumes:
-      - mssql_data:/var/opt/mssql
-      - ./backend/init.sql:/init.sql
+      - erp_data:/var/opt/mssql
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ATPL@123 -Q 'SELECT 1'"]
@@ -149,10 +168,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile.worker
     environment:
-      - DATABASE_URL=mssql+pyodbc://loyalty_user:loyalty_password@db:1433/loyalty_db?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=postgresql://loyalty_user:loyalty_password@db:5432/loyalty_db
       - REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
+      # Logic ERP settings for background tasks
+      - ERP_HOST=erp_db
+      - ERP_PORT=1433
+      - ERP_DATABASE=master
+      - ERP_USERNAME=sa
+      - ERP_PASSWORD=ATPL@123
+      - ERP_DRIVER=ODBC Driver 17 for SQL Server
       # WhatsApp settings for background tasks
       - WHATSAPP_API_URL=${WHATSAPP_API_URL}
       - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
@@ -168,10 +194,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile.worker
     environment:
-      - DATABASE_URL=mssql+pyodbc://loyalty_user:loyalty_password@db:1433/loyalty_db?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=postgresql://loyalty_user:loyalty_password@db:5432/loyalty_db
       - REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
+      # Logic ERP settings for scheduled tasks
+      - ERP_HOST=erp_db
+      - ERP_PORT=1433
+      - ERP_DATABASE=master
+      - ERP_USERNAME=sa
+      - ERP_PASSWORD=ATPL@123
+      - ERP_DRIVER=ODBC Driver 17 for SQL Server
     depends_on:
       - db
       - redis
@@ -179,6 +212,7 @@ services:
     command: celery -A app.worker.celery_app beat --loglevel=info
 
 volumes:
-  mssql_data:
+  postgres_data:
+  erp_data:
   redis_data:
   grafana_data:

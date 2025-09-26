@@ -326,7 +326,7 @@ class TestDataGenerator:
             customers.append({
                 "name": f"Test Customer {i+1}",
                 "email": f"customer{i+1}@example.com",
-                "phone": f"+12345678{i"02d"}",
+                "phone": f"+12345678{i:02d}",
                 "role": UserRole.CUSTOMER,
                 "status": UserStatus.ACTIVE
             })

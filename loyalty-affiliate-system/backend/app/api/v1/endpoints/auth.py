@@ -6,14 +6,10 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 
 from ...core.database import get_db
-from ...core.security import (
-    create_access_token,
-    create_refresh_token,
-    verify_password,
-    get_password_hash,
-    verify_token,
-)
+from ...core.security import verify_token
 from ...core.config import settings
+from ...services.auth_service import AuthService
+from ...models import UserRole, UserStatus
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
@@ -61,20 +57,33 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     - **password**: Password (min 8 characters)
     - **role**: User role (admin, customer, affiliate)
     """
-    # For now, we'll create a mock user since we don't have database models yet
-    # In Phase 3, this will be replaced with actual database operations
+    auth_service = AuthService(db)
 
-    user = {
-        "id": 1,
-        "name": user_data.name,
-        "email": user_data.email,
-        "phone": user_data.phone,
-        "role": user_data.role,
-        "is_active": True,
-        "created_at": "2024-01-01T00:00:00Z"
-    }
+    try:
+        # Create user (this will handle password hashing)
+        user = auth_service.create_user(
+            name=user_data.name,
+            email=user_data.email,
+            phone=user_data.phone,
+            password=user_data.password,
+            role=UserRole(user_data.role)
+        )
 
-    return user
+        return UserResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            phone=user.phone,
+            role=user.role.value,
+            is_active=user.status == UserStatus.ACTIVE,
+            created_at=user.created_at.isoformat() if user.created_at else None
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 
 @router.post("/login", response_model=Token, summary="Login user")
@@ -88,132 +97,117 @@ async def login(
     - **username**: User email address
     - **password**: User password
     """
-    # TODO: Replace with actual database authentication
-    # For now, we'll use environment variables for demo credentials
-    # In production, this should be replaced with proper database authentication
+    auth_service = AuthService(db)
 
-    import os
-
-    # Check for demo admin credentials from environment variables
-    demo_admin_email = os.getenv("DEMO_ADMIN_EMAIL", "admin@example.com")
-    demo_admin_password = os.getenv("DEMO_ADMIN_PASSWORD", "demo_admin_123")
-
-    if form_data.username == demo_admin_email and form_data.password == demo_admin_password:
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            subject="1", expires_delta=access_token_expires
+    try:
+        result = auth_service.authenticate_user(
+            email=form_data.username,
+            password=form_data.password
         )
-        refresh_token = create_refresh_token(subject="1")
 
         return Token(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer"
+            access_token=result["access_token"],
+            refresh_token=result["refresh_token"],
+            token_type=result["token_type"]
         )
 
-    # Check for demo user credentials from environment variables
-    demo_user_email = os.getenv("DEMO_USER_EMAIL", "user@example.com")
-    demo_user_password = os.getenv("DEMO_USER_PASSWORD", "demo_user_123")
-
-    if form_data.username == demo_user_email and form_data.password == demo_user_password:
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            subject="2", expires_delta=access_token_expires
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        refresh_token = create_refresh_token(subject="2")
-
-        return Token(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer"
-        )
-
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Incorrect email or password",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
 
 
 @router.post("/logout", summary="Logout user")
-async def logout(token: str = Depends(oauth2_scheme)):
+async def logout(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
     """
     Logout user and invalidate tokens.
 
     This endpoint will be enhanced in Phase 3 with proper token blacklisting.
     """
-    # For now, just return success
-    # In Phase 3, this will blacklist the token
-    return {"message": "Successfully logged out"}
+    auth_service = AuthService(db)
+
+    try:
+        # Get user from token
+        user = auth_service.get_user_by_token(token)
+
+        # In a real implementation, you might want to blacklist the token
+        result = auth_service.logout_user(user.id)
+
+        return result
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        )
 
 
 @router.get("/me", response_model=UserResponse, summary="Get current user")
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
     """
     Get current authenticated user information.
 
     Returns user details for the authenticated user.
     """
-    # For now, return mock user based on token
-    # In Phase 3, this will validate the token and fetch user from database
+    auth_service = AuthService(db)
 
-    payload = verify_token(token)
-    if not payload:
+    try:
+        user = auth_service.get_user_by_token(token)
+
+        return UserResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            phone=user.phone,
+            role=user.role.value,
+            is_active=user.status == UserStatus.ACTIVE,
+            created_at=user.created_at.isoformat() if user.created_at else None
+        )
+
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Mock user data - replace with database query in Phase 3
-    if payload == "1":
-        return {
-            "id": 1,
-            "name": "Admin User",
-            "email": "admin@example.com",
-            "phone": "+1234567890",
-            "role": "admin",
-            "is_active": True,
-            "created_at": "2024-01-01T00:00:00Z"
-        }
-    else:
-        return {
-            "id": 2,
-            "name": "John Doe",
-            "email": "user@example.com",
-            "phone": "+1234567891",
-            "role": "customer",
-            "is_active": True,
-            "created_at": "2024-01-01T00:00:00Z"
-        }
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 @router.post("/refresh", response_model=Token, summary="Refresh access token")
-async def refresh_token(refresh_token: str):
+async def refresh_token(
+    request: RefreshTokenRequest,
+    db: Session = Depends(get_db)
+):
     """
     Refresh access token using refresh token.
 
     - **refresh_token**: Valid refresh token
     """
-    # For now, create new tokens
-    # In Phase 3, this will validate the refresh token and generate new ones
+    auth_service = AuthService(db)
 
-    payload = verify_token(refresh_token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
+    try:
+        result = auth_service.refresh_token(request.refresh_token)
+
+        return Token(
+            access_token=result["access_token"],
+            refresh_token=result["refresh_token"],
+            token_type=result["token_type"]
         )
 
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        subject=payload, expires_delta=access_token_expires
-    )
-    new_refresh_token = create_refresh_token(subject=payload)
-
-    return Token(
-        access_token=access_token,
-        refresh_token=new_refresh_token,
-        token_type="bearer"
-    )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )

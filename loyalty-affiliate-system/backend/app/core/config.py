@@ -37,12 +37,12 @@ class Settings(BaseSettings):
     LOGIC_ERP_DATABASE_URL: str = Field(default="", description="Logic ERP database URL")
     LOGIC_ERP_API_KEY: str = Field(default="", description="Logic ERP API key")
 
-    # ERP Connection Settings (for MSSQL direct access)
-    ERP_HOST: str = Field(default="", description="ERP database host")
-    ERP_PORT: int = Field(default=1433, description="ERP database port")
-    ERP_DATABASE: str = Field(default="", description="ERP database name")
-    ERP_USERNAME: str = Field(default="", description="ERP database username")
-    ERP_PASSWORD: str = Field(default="", description="ERP database password")
+    # Logic ERP Connection Settings (MSSQL)
+    ERP_HOST: str = Field(default="erp_db", description="Logic ERP database host")
+    ERP_PORT: int = Field(default=1433, description="Logic ERP database port")
+    ERP_DATABASE: str = Field(default="master", description="Logic ERP database name")
+    ERP_USERNAME: str = Field(default="sa", description="Logic ERP database username")
+    ERP_PASSWORD: str = Field(default="ATPL@123", description="Logic ERP database password")
     ERP_DRIVER: str = Field(default="ODBC Driver 17 for SQL Server", description="ODBC driver name")
 
     @model_validator(mode='after')

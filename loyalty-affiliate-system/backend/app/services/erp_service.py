@@ -183,22 +183,17 @@ class LogicERPConnector(BaseERPConnector):
     async def get_customers(self, filters: Dict = None) -> List[Dict]:
         """Get customers from Logic ERP MSSQL database."""
         try:
-            # Build query based on common ERP table structures
-            # This is a generic implementation - adjust table/column names as needed
+            # Query based on actual Logic ERP table structure
             query = """
                 SELECT
                     CustomerID as id,
                     CustomerName as customer_name,
-                    Email as email_address,
-                    Phone as phone_number,
-                    Address as address,
-                    CustomerType as customer_type,
-                    CreditLimit as credit_limit,
-                    TaxID as tax_id,
-                    CreatedDate as created_at,
-                    ModifiedDate as updated_at
+                    EmailAddress as email_address,
+                    PhoneNumber as phone_number,
+                    Status as status,
+                    CAST(CustomerID as VARCHAR(50)) as customer_id_str
                 FROM Customers
-                WHERE IsActive = 1
+                WHERE Status = 'Active'
             """
 
             filter_conditions = []
@@ -206,16 +201,18 @@ class LogicERPConnector(BaseERPConnector):
                 if 'customer_id' in filters:
                     filter_conditions.append(f"CustomerID = {filters['customer_id']}")
                 if 'email' in filters:
-                    filter_conditions.append(f"Email LIKE '%{filters['email']}%'")
+                    filter_conditions.append(f"EmailAddress LIKE '%{filters['email']}%'")
                 if 'phone' in filters:
-                    filter_conditions.append(f"Phone LIKE '%{filters['phone']}%'")
+                    filter_conditions.append(f"PhoneNumber LIKE '%{filters['phone']}%'")
                 if 'name' in filters:
                     filter_conditions.append(f"CustomerName LIKE '%{filters['name']}%'")
+                if 'status' in filters:
+                    filter_conditions.append(f"Status = '{filters['status']}'")
 
             if filter_conditions:
                 query += " AND " + " AND ".join(filter_conditions)
 
-            query += " ORDER BY ModifiedDate DESC"
+            query += " ORDER BY CustomerID DESC"
 
             self.cursor.execute(query)
             columns = [column[0] for column in self.cursor.description]
@@ -230,35 +227,26 @@ class LogicERPConnector(BaseERPConnector):
     async def get_products(self, filters: Dict = None) -> List[Dict]:
         """Get products from Logic ERP MSSQL database."""
         try:
+            # Query based on actual Logic ERP Products table structure
             query = """
                 SELECT
                     ProductID as id,
-                    ProductCode as product_code,
                     ProductName as product_name,
-                    Category as category,
-                    Price as price,
-                    Cost as cost,
-                    StockQuantity as stock_quantity,
-                    IsActive as is_active,
-                    CreatedDate as created_at,
-                    ModifiedDate as updated_at
+                    CAST(ProductID as VARCHAR(50)) as product_id_str
                 FROM Products
-                WHERE IsActive = 1
             """
 
             filter_conditions = []
             if filters:
                 if 'product_id' in filters:
                     filter_conditions.append(f"ProductID = {filters['product_id']}")
-                if 'category' in filters:
-                    filter_conditions.append(f"Category = '{filters['category']}'")
-                if 'product_code' in filters:
-                    filter_conditions.append(f"ProductCode LIKE '%{filters['product_code']}%'")
+                if 'product_name' in filters:
+                    filter_conditions.append(f"ProductName LIKE '%{filters['product_name']}%'")
 
             if filter_conditions:
-                query += " AND " + " AND ".join(filter_conditions)
+                query += " WHERE " + " AND ".join(filter_conditions)
 
-            query += " ORDER BY ModifiedDate DESC"
+            query += " ORDER BY ProductID DESC"
 
             self.cursor.execute(query)
             columns = [column[0] for column in self.cursor.description]
@@ -273,41 +261,37 @@ class LogicERPConnector(BaseERPConnector):
     async def get_sales(self, filters: Dict = None) -> List[Dict]:
         """Get sales data from Logic ERP MSSQL database."""
         try:
+            # Query based on actual Logic ERP SalesOrders table structure
             query = """
                 SELECT
-                    s.SaleID as id,
-                    s.InvoiceNumber as invoice_number,
-                    s.CustomerID as customer_id,
-                    c.CustomerName as customer_name,
-                    s.SaleDate as sale_date,
-                    s.TotalAmount as total_amount,
-                    s.TotalDiscount as total_discount,
-                    s.NetAmount as net_amount,
-                    s.PaymentStatus as payment_status,
-                    s.CreatedDate as created_at,
-                    s.ModifiedDate as updated_at
-                FROM Sales s
-                INNER JOIN Customers c ON s.CustomerID = c.CustomerID
-                WHERE s.IsActive = 1
+                    so.OrderID as id,
+                    so.CustomerID as customer_id,
+                    so.OrderDate as order_date,
+                    so.TotalAmount as total_amount,
+                    so.PaymentStatus as payment_status,
+                    CAST(so.OrderID as VARCHAR(50)) as order_id_str,
+                    CAST(so.CustomerID as VARCHAR(50)) as customer_id_str
+                FROM SalesOrders so
+                WHERE so.PaymentStatus IS NOT NULL
             """
 
             filter_conditions = []
             if filters:
-                if 'sale_id' in filters:
-                    filter_conditions.append(f"s.SaleID = {filters['sale_id']}")
+                if 'order_id' in filters:
+                    filter_conditions.append(f"so.OrderID = {filters['order_id']}")
                 if 'customer_id' in filters:
-                    filter_conditions.append(f"s.CustomerID = {filters['customer_id']}")
-                if 'invoice_number' in filters:
-                    filter_conditions.append(f"s.InvoiceNumber LIKE '%{filters['invoice_number']}%'")
+                    filter_conditions.append(f"so.CustomerID = {filters['customer_id']}")
+                if 'payment_status' in filters:
+                    filter_conditions.append(f"so.PaymentStatus = '{filters['payment_status']}'")
                 if 'date_from' in filters:
-                    filter_conditions.append(f"s.SaleDate >= '{filters['date_from']}'")
+                    filter_conditions.append(f"so.OrderDate >= '{filters['date_from']}'")
                 if 'date_to' in filters:
-                    filter_conditions.append(f"s.SaleDate <= '{filters['date_to']}'")
+                    filter_conditions.append(f"so.OrderDate <= '{filters['date_to']}'")
 
             if filter_conditions:
                 query += " AND " + " AND ".join(filter_conditions)
 
-            query += " ORDER BY s.SaleDate DESC"
+            query += " ORDER BY so.OrderDate DESC"
 
             self.cursor.execute(query)
             columns = [column[0] for column in self.cursor.description]
@@ -568,29 +552,14 @@ class ERPIntegrationService:
             )
 
     def _transform_customer_data(self, erp_customer: Dict) -> Dict:
-        """Transform ERP customer data to loyalty system format."""
-        # Define data mapping
-        mappings = [
-            DataMapping("erp_id", "erp_id", DataMappingType.CUSTOMER),
-            DataMapping("customer_name", "name", DataMappingType.CUSTOMER),
-            DataMapping("email_address", "email", DataMappingType.CUSTOMER),
-            DataMapping("phone_number", "phone", DataMappingType.CUSTOMER),
-            DataMapping("address", "address", DataMappingType.CUSTOMER),
-            DataMapping("customer_type", "customer_type", DataMappingType.CUSTOMER),
-            DataMapping("credit_limit", "credit_limit", DataMappingType.CUSTOMER),
-            DataMapping("tax_id", "tax_id", DataMappingType.CUSTOMER)
-        ]
-
-        # Apply transformations
+        """Transform Logic ERP customer data to loyalty system format."""
+        # Apply transformations for Logic ERP structure
         transformed_data = {
             "erp_id": erp_customer.get("id"),
             "name": erp_customer.get("customer_name"),
             "email": erp_customer.get("email_address"),
             "phone": erp_customer.get("phone_number"),
-            "address": erp_customer.get("address"),
-            "customer_type": erp_customer.get("customer_type"),
-            "credit_limit": erp_customer.get("credit_limit"),
-            "tax_id": erp_customer.get("tax_id"),
+            "status": erp_customer.get("status"),
             "sync_timestamp": datetime.utcnow(),
             "data_hash": self._calculate_data_hash(erp_customer)
         }
@@ -598,7 +567,7 @@ class ERPIntegrationService:
         return transformed_data
 
     def _transform_sale_data(self, erp_sale: Dict) -> Dict:
-        """Transform ERP sale data to loyalty transaction format."""
+        """Transform Logic ERP SalesOrders data to loyalty transaction format."""
         # Calculate points based on sale amount
         sale_amount = float(erp_sale.get("total_amount", 0))
         points_earned = int(sale_amount * 0.01)  # 1 point per $100
@@ -610,8 +579,9 @@ class ERPIntegrationService:
             "points_earned": points_earned,
             "transaction_type": TransactionType.EARNED,
             "source": TransactionSource.PURCHASE,
-            "description": f"Points earned from sale {erp_sale.get('invoice_number', '')}",
-            "transaction_date": erp_sale.get("sale_date", datetime.utcnow()),
+            "description": f"Points earned from Order #{erp_sale.get('order_id_str', '')}",
+            "transaction_date": erp_sale.get("order_date", datetime.utcnow()),
+            "payment_status": erp_sale.get("payment_status"),
             "sync_timestamp": datetime.utcnow()
         }
 

@@ -1,499 +1,390 @@
 """
-Reward System Business Logic Service.
+Reward Service
 
-Handles reward catalog management, redemptions, and availability checking.
+Handles reward catalog management, redemptions, inventory tracking,
+and reward-related business logic.
 """
 
-from typing import List, Optional, Dict, Tuple
 from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func, desc
-import logging
-import random
-import string
+from sqlalchemy import func, and_
 
 from ..models import (
-    Customer, CustomerTier,
-    Reward, RewardStatus, RewardRedemption,
-    LoyaltyTransaction, TransactionType, TransactionSource,
-    TierBenefit, User
+    Reward, RewardRedemption, LoyaltyTransaction,
+    Customer, User, RewardStatus, TransactionType,
+    TransactionSource
 )
-from ..core.database import SessionLocal
-from .loyalty_service import LoyaltyService
-
-logger = logging.getLogger(__name__)
 
 
 class RewardService:
-    """Service class for reward system operations."""
+    """
+    Service for handling reward operations.
+    """
 
     def __init__(self, db: Session):
         self.db = db
-        self.loyalty_service = LoyaltyService(db)
 
-    def get_available_rewards(self, customer_id: int) -> List[Dict]:
-        """
-        Get rewards available for a customer based on their points and tier.
+    def create_reward(self, name: str, description: Optional[str], points_required: int,
+                     category: Optional[str] = None, image_url: Optional[str] = None,
+                     stock_quantity: int = 0, max_per_customer: int = 1,
+                     valid_from: Optional[datetime] = None, valid_until: Optional[datetime] = None,
+                     terms_conditions: Optional[str] = None, is_featured: bool = False,
+                     created_by: int = None) -> Reward:
+        """Create a new reward."""
+        if points_required <= 0:
+            raise ValueError("Points required must be positive")
 
-        Args:
-            customer_id: Customer ID
+        if stock_quantity < 0:
+            raise ValueError("Stock quantity cannot be negative")
 
-        Returns:
-            List of available rewards with redemption info
-        """
-        customer = self.db.query(Customer).filter(Customer.id == customer_id).first()
-        if not customer:
-            raise ValueError(f"Customer with ID {customer_id} not found")
-
-        # Get all active rewards
-        rewards = self.db.query(Reward).filter(
-            and_(
-                Reward.status == RewardStatus.ACTIVE,
-                Reward.points_required <= customer.total_points,
-                or_(
-                    Reward.stock_quantity == -1,  # Unlimited stock
-                    Reward.stock_quantity > 0     # Limited stock available
-                ),
-                or_(
-                    Reward.valid_until.is_(None),  # No expiry
-                    Reward.valid_until >= datetime.utcnow()  # Not expired
-                )
-            )
-        ).all()
-
-        available_rewards = []
-        for reward in rewards:
-            # Check if customer hasn't exceeded max redemptions
-            redemption_count = self.db.query(func.count(RewardRedemption.id)).filter(
-                and_(
-                    RewardRedemption.reward_id == reward.id,
-                    RewardRedemption.customer_id == customer_id,
-                    RewardRedemption.status.in_(["completed", "pending"])
-                )
-            ).scalar()
-
-            if redemption_count < reward.max_per_customer:
-                available_rewards.append({
-                    "id": reward.id,
-                    "name": reward.name,
-                    "description": reward.description,
-                    "points_required": reward.points_required,
-                    "category": reward.category,
-                    "image_url": reward.image_url,
-                    "is_featured": reward.is_featured,
-                    "stock_remaining": reward.stock_quantity if reward.stock_quantity != -1 else "unlimited",
-                    "customer_redemptions": redemption_count,
-                    "max_per_customer": reward.max_per_customer
-                })
-
-        return available_rewards
-
-    def redeem_reward(
-        self,
-        customer_id: int,
-        reward_id: int,
-        quantity: int = 1,
-        redeemed_by: Optional[int] = None,
-        notes: Optional[str] = None
-    ) -> Dict:
-        """
-        Redeem a reward for a customer.
-
-        Args:
-            customer_id: Customer ID
-            reward_id: Reward ID to redeem
-            quantity: Quantity to redeem
-            redeemed_by: User ID who processed the redemption
-            notes: Optional notes
-
-        Returns:
-            Dictionary with redemption result
-        """
-        # Get customer and reward
-        customer = self.db.query(Customer).filter(Customer.id == customer_id).first()
-        reward = self.db.query(Reward).filter(Reward.id == reward_id).first()
-
-        if not customer:
-            raise ValueError(f"Customer with ID {customer_id} not found")
-
-        if not reward:
-            raise ValueError(f"Reward with ID {reward_id} not found")
-
-        if reward.status != RewardStatus.ACTIVE:
-            raise ValueError("Reward is not available")
-
-        if customer.total_points < (reward.points_required * quantity):
-            raise ValueError(f"Insufficient points. Required: {reward.points_required * quantity}, Available: {customer.total_points}")
-
-        # Check stock availability
-        if reward.stock_quantity != -1:  # Limited stock
-            available_stock = reward.stock_quantity
-            current_redemptions = self.db.query(func.sum(RewardRedemption.quantity)).filter(
-                and_(
-                    RewardRedemption.reward_id == reward_id,
-                    RewardRedemption.status.in_(["completed", "pending"])
-                )
-            ).scalar() or 0
-
-            if (current_redemptions + quantity) > available_stock:
-                raise ValueError("Insufficient stock available")
-
-        # Check max per customer
-        current_customer_redemptions = self.db.query(func.sum(RewardRedemption.quantity)).filter(
-            and_(
-                RewardRedemption.reward_id == reward_id,
-                RewardRedemption.customer_id == customer_id,
-                RewardRedemption.status.in_(["completed", "pending"])
-            )
-        ).scalar() or 0
-
-        if (current_customer_redemptions + quantity) > reward.max_per_customer:
-            raise ValueError(f"Maximum redemptions per customer exceeded. Max: {reward.max_per_customer}")
-
-        # Generate redemption code
-        redemption_code = self._generate_redemption_code()
-
-        # Deduct points
-        total_points = reward.points_required * quantity
-        transaction = self.loyalty_service.deduct_points(
-            customer_id=customer_id,
-            points=total_points,
-            source=TransactionSource.MANUAL,
-            description=f"Redeemed {quantity}x {reward.name}",
-            reference_id=f"REWARD-{reward.id}",
-            metadata={"reward_id": reward_id, "quantity": quantity}
-        )
-
-        # Create redemption record
-        redemption = RewardRedemption(
-            transaction_id=transaction.id,
-            reward_id=reward_id,
-            customer_id=customer_id,
-            quantity=quantity,
-            redemption_code=redemption_code,
-            status="pending",
-            notes=notes
-        )
-
-        self.db.add(redemption)
-
-        # Update stock if limited
-        if reward.stock_quantity != -1:
-            # This would typically be done in a transaction to prevent race conditions
-            reward.stock_quantity -= quantity
-
-        self.db.commit()
-
-        logger.info(f"Reward {reward_id} redeemed by customer {customer_id}")
-        return {
-            "success": True,
-            "redemption_id": redemption.id,
-            "redemption_code": redemption_code,
-            "points_deducted": total_points,
-            "transaction_id": transaction.id,
-            "reward": {
-                "id": reward.id,
-                "name": reward.name,
-                "description": reward.description,
-                "category": reward.category
-            }
-        }
-
-    def _generate_redemption_code(self, length: int = 8) -> str:
-        """
-        Generate a unique redemption code.
-
-        Args:
-            length: Length of the code
-
-        Returns:
-            Unique redemption code
-        """
-        while True:
-            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
-
-            # Check if code already exists
-            existing = self.db.query(RewardRedemption).filter(
-                RewardRedemption.redemption_code == code
-            ).first()
-
-            if not existing:
-                return code
-
-    def fulfill_redemption(
-        self,
-        redemption_id: int,
-        fulfilled_by: int,
-        notes: Optional[str] = None
-    ) -> bool:
-        """
-        Mark a redemption as fulfilled.
-
-        Args:
-            redemption_id: Redemption ID to fulfill
-            fulfilled_by: User ID who fulfilled it
-            notes: Optional fulfillment notes
-
-        Returns:
-            True if successful
-        """
-        redemption = self.db.query(RewardRedemption).filter(
-            RewardRedemption.id == redemption_id
-        ).first()
-
-        if not redemption:
-            raise ValueError(f"Redemption with ID {redemption_id} not found")
-
-        if redemption.status == "completed":
-            raise ValueError("Redemption is already completed")
-
-        redemption.status = "completed"
-        redemption.fulfilled_at = datetime.utcnow()
-        redemption.fulfilled_by = fulfilled_by
-        redemption.notes = notes
-
-        self.db.commit()
-
-        logger.info(f"Redemption {redemption_id} fulfilled by user {fulfilled_by}")
-        return True
-
-    def cancel_redemption(
-        self,
-        redemption_id: int,
-        cancelled_by: int,
-        reason: str
-    ) -> Dict:
-        """
-        Cancel a redemption and refund points.
-
-        Args:
-            redemption_id: Redemption ID to cancel
-            cancelled_by: User ID who cancelled it
-            reason: Reason for cancellation
-
-        Returns:
-            Dictionary with cancellation result
-        """
-        redemption = self.db.query(RewardRedemption).filter(
-            RewardRedemption.id == redemption_id
-        ).first()
-
-        if not redemption:
-            raise ValueError(f"Redemption with ID {redemption_id} not found")
-
-        if redemption.status not in ["pending", "completed"]:
-            raise ValueError("Redemption cannot be cancelled")
-
-        # Get transaction to refund points
-        transaction = self.db.query(LoyaltyTransaction).filter(
-            LoyaltyTransaction.id == redemption.transaction_id
-        ).first()
-
-        if not transaction:
-            raise ValueError("Associated transaction not found")
-
-        # Refund points (reverse the transaction)
-        refund_transaction = self.loyalty_service.award_points(
-            customer_id=redemption.customer_id,
-            points=abs(transaction.points),  # Points were deducted, so refund the positive amount
-            source=TransactionSource.MANUAL,
-            description=f"Refund for cancelled redemption: {redemption.reward.name}",
-            reference_id=f"REFUND-{redemption.id}",
-            metadata={"original_redemption_id": redemption_id, "reason": reason}
-        )
-
-        # Update redemption status
-        redemption.status = "cancelled"
-        redemption.notes = f"Cancelled: {reason}"
-
-        # Restore stock if limited
-        reward = self.db.query(Reward).filter(Reward.id == redemption.reward_id).first()
-        if reward and reward.stock_quantity != -1:
-            reward.stock_quantity += redemption.quantity
-
-        self.db.commit()
-
-        logger.info(f"Redemption {redemption_id} cancelled by user {cancelled_by}")
-        return {
-            "success": True,
-            "redemption_id": redemption_id,
-            "refunded_points": abs(transaction.points),
-            "refund_transaction_id": refund_transaction.id,
-            "reason": reason
-        }
-
-    def get_redemption_history(self, customer_id: int, limit: int = 50, offset: int = 0) -> Dict:
-        """
-        Get customer's redemption history.
-
-        Returns:
-            Dictionary with redemptions and pagination info
-        """
-        total = self.db.query(func.count(RewardRedemption.id)).filter(
-            RewardRedemption.customer_id == customer_id
-        ).scalar()
-
-        redemptions = self.db.query(RewardRedemption).filter(
-            RewardRedemption.customer_id == customer_id
-        ).order_by(desc(RewardRedemption.created_at)).offset(offset).limit(limit).all()
-
-        return {
-            "redemptions": [
-                {
-                    "id": r.id,
-                    "redemption_code": r.redemption_code,
-                    "reward": {
-                        "id": r.reward.id,
-                        "name": r.reward.name,
-                        "description": r.reward.description,
-                        "category": r.reward.category,
-                        "points_required": r.reward.points_required
-                    },
-                    "quantity": r.quantity,
-                    "status": r.status,
-                    "created_at": r.created_at.isoformat(),
-                    "fulfilled_at": r.fulfilled_at.isoformat() if r.fulfilled_at else None,
-                    "fulfilled_by": r.fulfilled_by,
-                    "notes": r.notes
-                }
-                for r in redemptions
-            ],
-            "pagination": {
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-                "has_more": offset + limit < total
-            }
-        }
-
-    def get_reward_statistics(self, reward_id: int) -> Dict:
-        """
-        Get statistics for a specific reward.
-
-        Returns:
-            Dictionary with reward statistics
-        """
-        reward = self.db.query(Reward).filter(Reward.id == reward_id).first()
-        if not reward:
-            raise ValueError(f"Reward with ID {reward_id} not found")
-
-        total_redemptions = self.db.query(func.sum(RewardRedemption.quantity)).filter(
-            and_(
-                RewardRedemption.reward_id == reward_id,
-                RewardRedemption.status.in_(["completed", "pending"])
-            )
-        ).scalar() or 0
-
-        completed_redemptions = self.db.query(func.sum(RewardRedemption.quantity)).filter(
-            and_(
-                RewardRedemption.reward_id == reward_id,
-                RewardRedemption.status == "completed"
-            )
-        ).scalar() or 0
-
-        return {
-            "reward_id": reward.id,
-            "reward_name": reward.name,
-            "total_redemptions": total_redemptions,
-            "completed_redemptions": completed_redemptions,
-            "stock_remaining": reward.stock_quantity if reward.stock_quantity != -1 else "unlimited",
-            "is_available": reward.status == RewardStatus.ACTIVE and (
-                reward.stock_quantity == -1 or reward.stock_quantity > 0
-            ),
-            "total_points_redeemed": total_redemptions * reward.points_required
-        }
-
-    def create_reward(
-        self,
-        name: str,
-        description: str,
-        points_required: int,
-        category: str,
-        stock_quantity: int = -1,
-        max_per_customer: int = 1,
-        image_url: Optional[str] = None,
-        terms_conditions: Optional[str] = None,
-        is_featured: bool = False,
-        valid_from: Optional[datetime] = None,
-        valid_until: Optional[datetime] = None,
-        created_by: int
-    ) -> Reward:
-        """
-        Create a new reward.
-
-        Args:
-            name: Reward name
-            description: Reward description
-            points_required: Points required for redemption
-            category: Reward category
-            stock_quantity: Stock quantity (-1 for unlimited)
-            max_per_customer: Maximum redemptions per customer
-            image_url: Optional image URL
-            terms_conditions: Optional terms and conditions
-            is_featured: Whether to feature this reward
-            valid_from: Optional valid from date
-            valid_until: Optional valid until date
-            created_by: User ID who created the reward
-
-        Returns:
-            Created reward object
-        """
         reward = Reward(
             name=name,
             description=description,
             points_required=points_required,
             category=category,
+            image_url=image_url,
+            status=RewardStatus.ACTIVE,
             stock_quantity=stock_quantity,
             max_per_customer=max_per_customer,
-            image_url=image_url,
+            valid_from=valid_from or datetime.utcnow(),
+            valid_until=valid_until,
             terms_conditions=terms_conditions,
             is_featured=is_featured,
-            status=RewardStatus.ACTIVE,
-            valid_from=valid_from or datetime.utcnow(),
-            valid_until=valid_until
+            created_by=created_by
         )
 
         self.db.add(reward)
         self.db.commit()
         self.db.refresh(reward)
 
-        logger.info(f"Reward '{name}' created by user {created_by}")
         return reward
 
-    def update_reward(
-        self,
-        reward_id: int,
-        updates: Dict,
-        updated_by: int
-    ) -> Reward:
-        """
-        Update an existing reward.
+    def get_reward_by_id(self, reward_id: int) -> Optional[Reward]:
+        """Get reward by ID."""
+        return self.db.query(Reward).filter(Reward.id == reward_id).first()
 
-        Args:
-            reward_id: Reward ID to update
-            updates: Dictionary of fields to update
-            updated_by: User ID making the update
+    def get_available_rewards(self, customer_id: Optional[int] = None, category: Optional[str] = None) -> List[Reward]:
+        """Get available rewards, optionally filtered by customer eligibility."""
+        query = self.db.query(Reward).filter(
+            Reward.status == RewardStatus.ACTIVE,
+            Reward.valid_from <= datetime.utcnow(),
+            Reward.stock_quantity > 0
+        )
 
-        Returns:
-            Updated reward object
-        """
-        reward = self.db.query(Reward).filter(Reward.id == reward_id).first()
+        if Reward.valid_until.isnot(None):
+            query = query.filter(Reward.valid_until >= datetime.utcnow())
+
+        if category:
+            query = query.filter(Reward.category == category)
+
+        rewards = query.all()
+
+        if customer_id:
+            # Filter by customer eligibility (points and redemption limits)
+            customer = self.db.query(Customer).filter(Customer.id == customer_id).first()
+            if customer:
+                eligible_rewards = []
+                for reward in rewards:
+                    if self._is_customer_eligible_for_reward(customer, reward):
+                        eligible_rewards.append(reward)
+                return eligible_rewards
+
+        return rewards
+
+    def redeem_reward(self, customer_id: int, reward_id: int, quantity: int = 1,
+                     notes: Optional[str] = None, user_id: Optional[int] = None) -> Dict[str, Any]:
+        """Redeem a reward for a customer."""
+        customer = self.db.query(Customer).filter(Customer.id == customer_id).first()
+        reward = self.get_reward_by_id(reward_id)
+
+        if not customer:
+            raise ValueError("Customer not found")
+
         if not reward:
-            raise ValueError(f"Reward with ID {reward_id} not found")
+            raise ValueError("Reward not found")
 
-        # Update allowed fields
-        allowed_fields = [
-            'name', 'description', 'points_required', 'category',
-            'stock_quantity', 'max_per_customer', 'image_url',
-            'terms_conditions', 'is_featured', 'valid_until'
-        ]
+        if reward.status != RewardStatus.ACTIVE:
+            raise ValueError("Reward is not available")
 
-        for field, value in updates.items():
-            if field in allowed_fields:
-                setattr(reward, field, value)
+        if reward.stock_quantity < quantity:
+            raise ValueError("Insufficient stock")
+
+        if not self._is_customer_eligible_for_reward(customer, reward, quantity):
+            raise ValueError("Customer is not eligible for this reward")
+
+        # Check if customer has already reached max redemptions for this reward
+        existing_redemptions = self.db.query(RewardRedemption).filter(
+            RewardRedemption.customer_id == customer_id,
+            RewardRedemption.reward_id == reward_id,
+            RewardRedemption.status.in_(["pending", "approved", "fulfilled"])
+        ).count()
+
+        if existing_redemptions >= reward.max_per_customer:
+            raise ValueError("Maximum redemptions per customer reached")
+
+        total_points_required = reward.points_required * quantity
+
+        if customer.total_points < total_points_required:
+            raise ValueError("Insufficient points")
+
+        # Create redemption record
+        redemption = RewardRedemption(
+            transaction_id=None,  # Will be set after transaction creation
+            reward_id=reward_id,
+            customer_id=customer_id,
+            quantity=quantity,
+            redemption_code=self._generate_redemption_code(),
+            status="pending",
+            notes=notes
+        )
+
+        self.db.add(redemption)
+
+        # Deduct points
+        transaction = self.db.query(LoyaltyTransaction).filter(
+            LoyaltyTransaction.customer_id == customer_id,
+            LoyaltyTransaction.points == -total_points_required,
+            LoyaltyTransaction.transaction_type == TransactionType.REDEEMED,
+            LoyaltyTransaction.description.like(f"%Reward redemption%")
+        ).first()
+
+        if not transaction:
+            # Create points deduction transaction
+            from ..services.loyalty_service import LoyaltyService
+            loyalty_service = LoyaltyService(self.db)
+
+            transaction = loyalty_service.deduct_points(
+                customer_id=customer_id,
+                points=total_points_required,
+                source=TransactionSource.REDEMPTION,
+                description=f"Reward redemption: {reward.name}",
+                user_id=user_id
+            )
+
+        # Update redemption with transaction ID
+        redemption.transaction_id = transaction.id
+
+        # Update reward stock
+        reward.stock_quantity -= quantity
+
+        # Check if reward should be deactivated due to low stock
+        if reward.stock_quantity == 0:
+            reward.status = RewardStatus.OUT_OF_STOCK
+
+        customer.last_activity = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(redemption)
+
+        return {
+            "redemption": redemption,
+            "transaction": transaction,
+            "reward": reward
+        }
+
+    def get_customer_redemptions(self, customer_id: int, status: Optional[str] = None,
+                                limit: int = 50) -> List[RewardRedemption]:
+        """Get customer redemption history."""
+        query = self.db.query(RewardRedemption).filter(RewardRedemption.customer_id == customer_id)
+
+        if status:
+            query = query.filter(RewardRedemption.status == status)
+
+        return query.order_by(RewardRedemption.created_at.desc()).limit(limit).all()
+
+    def fulfill_redemption(self, redemption_id: int, fulfilled_by: int,
+                          notes: Optional[str] = None) -> RewardRedemption:
+        """Mark a redemption as fulfilled."""
+        redemption = self.db.query(RewardRedemption).filter(RewardRedemption.id == redemption_id).first()
+
+        if not redemption:
+            raise ValueError("Redemption not found")
+
+        if redemption.status not in ["pending", "approved"]:
+            raise ValueError("Redemption cannot be fulfilled in current status")
+
+        redemption.status = "fulfilled"
+        redemption.fulfilled_at = datetime.utcnow()
+        redemption.fulfilled_by = fulfilled_by
+        redemption.notes = notes or redemption.notes
+
+        self.db.commit()
+        self.db.refresh(redemption)
+
+        return redemption
+
+    def cancel_redemption(self, redemption_id: int, notes: Optional[str] = None) -> RewardRedemption:
+        """Cancel a redemption and restore points."""
+        redemption = self.db.query(RewardRedemption).filter(RewardRedemption.id == redemption_id).first()
+
+        if not redemption:
+            raise ValueError("Redemption not found")
+
+        if redemption.status not in ["pending", "approved"]:
+            raise ValueError("Redemption cannot be cancelled in current status")
+
+        # Restore points
+        if redemption.transaction_id:
+            transaction = self.db.query(LoyaltyTransaction).filter(
+                LoyaltyTransaction.id == redemption.transaction_id
+            ).first()
+
+            if transaction:
+                # Create reversal transaction
+                from ..services.loyalty_service import LoyaltyService
+                loyalty_service = LoyaltyService(self.db)
+
+                loyalty_service.award_points(
+                    customer_id=redemption.customer_id,
+                    points=abs(transaction.points),
+                    source=TransactionSource.REDEMPTION,
+                    description=f"Redemption cancelled: {redemption.reward.name}",
+                    reference_id=str(redemption.id)
+                )
+
+                transaction.is_active = False
+
+        # Restore stock
+        reward = self.get_reward_by_id(redemption.reward_id)
+        if reward:
+            reward.stock_quantity += redemption.quantity
+
+            if reward.stock_quantity > 0 and reward.status == RewardStatus.OUT_OF_STOCK:
+                reward.status = RewardStatus.ACTIVE
+
+        redemption.status = "cancelled"
+        redemption.notes = notes or redemption.notes
+
+        self.db.commit()
+        self.db.refresh(redemption)
+
+        return redemption
+
+    def get_reward_categories(self) -> List[str]:
+        """Get all unique reward categories."""
+        categories = self.db.query(Reward.category).distinct().filter(
+            Reward.category.isnot(None)
+        ).all()
+
+        return [cat[0] for cat in categories if cat[0]]
+
+    def get_featured_rewards(self, limit: int = 10) -> List[Reward]:
+        """Get featured rewards."""
+        return self.db.query(Reward).filter(
+            Reward.is_featured == True,
+            Reward.status == RewardStatus.ACTIVE
+        ).limit(limit).all()
+
+    def update_reward_stock(self, reward_id: int, new_stock: int) -> Reward:
+        """Update reward stock quantity."""
+        reward = self.get_reward_by_id(reward_id)
+
+        if not reward:
+            raise ValueError("Reward not found")
+
+        if new_stock < 0:
+            raise ValueError("Stock quantity cannot be negative")
+
+        previous_stock = reward.stock_quantity
+        reward.stock_quantity = new_stock
+
+        # Update status based on stock
+        if new_stock == 0 and previous_stock > 0:
+            reward.status = RewardStatus.OUT_OF_STOCK
+        elif new_stock > 0 and reward.status == RewardStatus.OUT_OF_STOCK:
+            reward.status = RewardStatus.ACTIVE
 
         self.db.commit()
         self.db.refresh(reward)
 
-        logger.info(f"Reward {reward_id} updated by user {updated_by}")
         return reward
+
+    def get_reward_analytics(self, start_date: Optional[datetime] = None,
+                            end_date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Get reward analytics."""
+        query = self.db.query(RewardRedemption)
+
+        if start_date:
+            query = query.filter(RewardRedemption.created_at >= start_date)
+        if end_date:
+            query = query.filter(RewardRedemption.created_at <= end_date)
+
+        total_redemptions = query.count()
+
+        # Status breakdown
+        status_breakdown = {}
+        for status in ["pending", "approved", "fulfilled", "cancelled"]:
+            count = query.filter(RewardRedemption.status == status).count()
+            status_breakdown[status] = count
+
+        # Most popular rewards
+        popular_rewards = self.db.query(
+            RewardRedemption.reward_id,
+            func.count(RewardRedemption.id).label('redemption_count')
+        ).group_by(RewardRedemption.reward_id).order_by(
+            func.count(RewardRedemption.id).desc()
+        ).limit(10).all()
+
+        # Total points redeemed
+        total_points_redeemed = abs(
+            self.db.query(func.sum(LoyaltyTransaction.points)).filter(
+                LoyaltyTransaction.transaction_type == TransactionType.REDEEMED,
+                LoyaltyTransaction.source == TransactionSource.REDEMPTION
+            ).scalar() or 0
+        )
+
+        # Reward inventory status
+        inventory_status = self.db.query(
+            func.sum(Reward.stock_quantity).label('total_stock'),
+            func.count(Reward.id).label('total_rewards'),
+            func.count(func.case((Reward.stock_quantity == 0, 1))).label('out_of_stock')
+        ).first()
+
+        return {
+            "period": {
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None
+            },
+            "redemptions": {
+                "total": total_redemptions,
+                "by_status": status_breakdown,
+                "points_redeemed": total_points_redeemed
+            },
+            "popular_rewards": [
+                {"reward_id": r.reward_id, "redemption_count": r.redemption_count}
+                for r in popular_rewards
+            ],
+            "inventory": {
+                "total_stock": inventory_status.total_stock or 0,
+                "total_rewards": inventory_status.total_rewards or 0,
+                "out_of_stock": inventory_status.out_of_stock or 0
+            }
+        }
+
+    def _is_customer_eligible_for_reward(self, customer: Customer, reward: Reward, quantity: int = 1) -> bool:
+        """Check if customer is eligible for a reward."""
+        if customer.total_points < (reward.points_required * quantity):
+            return False
+
+        # Check if customer has reached max redemptions
+        existing_redemptions = self.db.query(RewardRedemption).filter(
+            RewardRedemption.customer_id == customer.id,
+            RewardRedemption.reward_id == reward.id,
+            RewardRedemption.status.in_(["pending", "approved", "fulfilled"])
+        ).count()
+
+        return existing_redemptions < reward.max_per_customer
+
+    def _generate_redemption_code(self) -> str:
+        """Generate a unique redemption code."""
+        import random
+        import string
+
+        while True:
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+            existing = self.db.query(RewardRedemption).filter(
+                RewardRedemption.redemption_code == code
+            ).first()
+
+            if not existing:
+                return code

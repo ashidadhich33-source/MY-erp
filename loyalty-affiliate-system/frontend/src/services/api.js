@@ -94,4 +94,13 @@ export const analyticsAPI = {
   getRevenue: (params) => api.get('/analytics/revenue', { params }),
 }
 
+export const erpAPI = {
+  testConnection: () => api.get('/erp/test-connection'),
+  syncCustomers: () => api.post('/erp/sync/customers'),
+  syncSales: () => api.post('/erp/sync/sales'),
+  syncProducts: () => api.post('/erp/sync/products'),
+  getSyncStatus: () => api.get('/erp/sync-status'),
+  getDataSummary: () => api.get('/erp/data-summary'),
+}
+
 export default api
