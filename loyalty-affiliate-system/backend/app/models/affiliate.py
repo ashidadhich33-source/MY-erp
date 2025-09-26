@@ -65,11 +65,8 @@ class CustomerReferral(Base):
     metadata = Column(Text)  # Additional referral data
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Indexes for performance
-    __table_args__ = (
-        {'mysql_index': [('affiliate_id', 'customer_id')]},
-        {'mysql_index': [('referral_code_used',)]}
-    )
+    # Indexes (database-agnostic)
+    __table_args__ = ()
 
     # Relationships
     affiliate = relationship("Affiliate", back_populates="referrals")

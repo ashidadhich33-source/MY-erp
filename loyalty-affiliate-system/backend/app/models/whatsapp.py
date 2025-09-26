@@ -60,13 +60,8 @@ class WhatsAppMessage(Base):
     read_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Indexes for performance
-    __table_args__ = (
-        {'mysql_index': [('user_id', 'customer_id')]},
-        {'mysql_index': [('status',)]},
-        {'mysql_index': [('message_type',)]},
-        {'mysql_index': [('recipient_phone',)]}
-    )
+    # Indexes (database-agnostic)
+    __table_args__ = ()
 
     # Relationships
     user = relationship("User", back_populates="whatsapp_messages")

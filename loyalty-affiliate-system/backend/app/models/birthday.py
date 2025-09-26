@@ -38,13 +38,8 @@ class BirthdayPromotion(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Ensure either customer_id or kid_id is set, but not both
-    __table_args__ = (
-        {'mysql_check': 'customer_id IS NOT NULL OR kid_id IS NOT NULL'},
-        {'mysql_check': 'customer_id IS NULL OR kid_id IS NULL'},
-        {'mysql_index': [('birthday_date',)]},
-        {'mysql_index': [('scheduled_date',)]},
-        {'mysql_index': [('status',)]}
-    )
+    # Note: Check constraints are database-specific and should be handled at application level
+    __table_args__ = ()
 
     # Relationships
     customer = relationship("Customer", back_populates="birthday_promotions")

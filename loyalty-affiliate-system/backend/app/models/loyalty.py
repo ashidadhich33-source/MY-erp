@@ -29,6 +29,12 @@ class RewardStatus(str, enum.Enum):
     DISCONTINUED = "discontinued"
 
 
+class RedemptionStatus(str, enum.Enum):
+    COMPLETED = "completed"
+    PENDING = "pending"
+    CANCELLED = "cancelled"
+
+
 class LoyaltyTransaction(Base):
     __tablename__ = "loyalty_transactions"
 
@@ -47,9 +53,7 @@ class LoyaltyTransaction(Base):
 
     # Indexes for performance
     __table_args__ = (
-        {'mysql_index': [('user_id', 'customer_id')],
-         'mysql_index': [('transaction_type',)],
-         'mysql_index': [('source',)]}
+        {'index': True, 'unique': False, 'mysql_length': None},
     )
 
     # Relationships
@@ -90,7 +94,7 @@ class RewardRedemption(Base):
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     quantity = Column(Integer, default=1, nullable=False)
     redemption_code = Column(String(100), unique=True)  # Unique code for redemption
-    status = Column(String(50), default="completed")  # completed, pending, cancelled
+    status = Column(Enum(RedemptionStatus), default=RedemptionStatus.COMPLETED, nullable=False)
     fulfilled_at = Column(DateTime(timezone=True))
     fulfilled_by = Column(Integer, ForeignKey("users.id"))  # Admin who fulfilled
     notes = Column(Text)
@@ -115,8 +119,5 @@ class TierBenefit(Base):
     valid_until = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Indexes
-    __table_args__ = (
-        {'mysql_index': [('tier',)]},
-        {'mysql_index': [('benefit_type',)]}
-    )
+    # Indexes (database-agnostic)
+    __table_args__ = ()
