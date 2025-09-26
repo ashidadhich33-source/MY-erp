@@ -9,7 +9,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=mssql+pyodbc://loyalty_user:loyalty_password@db:1433/loyalty_db?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=postgresql://loyalty_user:loyalty_password@db:5432/loyalty_db
       - REDIS_URL=redis://redis:6379
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
       - ENVIRONMENT=production
@@ -74,21 +74,21 @@ services:
       retries: 3
       start_period: 30s
 
-  # Microsoft SQL Server database
+  # PostgreSQL database
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: postgres:15-alpine
     environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=ATPL@123
-      - MSSQL_PID=Express
+      - POSTGRES_DB=loyalty_db
+      - POSTGRES_USER=loyalty_user
+      - POSTGRES_PASSWORD=loyalty_password
     ports:
-      - "1433:1433"
+      - "5432:5432"
     volumes:
-      - mssql_data:/var/opt/mssql
-      - ./backend/init.sql:/init.sql
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ATPL@123 -Q 'SELECT 1'"]
+      test: ["CMD-SHELL", "pg_isready -U loyalty_user -d loyalty_db"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -149,7 +149,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.worker
     environment:
-      - DATABASE_URL=mssql+pyodbc://loyalty_user:loyalty_password@db:1433/loyalty_db?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=postgresql://loyalty_user:loyalty_password@db:5432/loyalty_db
       - REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
@@ -168,7 +168,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.worker
     environment:
-      - DATABASE_URL=mssql+pyodbc://loyalty_user:loyalty_password@db:1433/loyalty_db?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=postgresql://loyalty_user:loyalty_password@db:5432/loyalty_db
       - REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
@@ -179,6 +179,6 @@ services:
     command: celery -A app.worker.celery_app beat --loglevel=info
 
 volumes:
-  mssql_data:
+  postgres_data:
   redis_data:
   grafana_data:

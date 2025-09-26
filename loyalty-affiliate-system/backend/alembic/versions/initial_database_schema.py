@@ -7,7 +7,7 @@ Create Date: 2024-01-01 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '001'
@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.Column('email_verified', sa.Boolean(), nullable=False),
         sa.Column('phone_verified', sa.Boolean(), nullable=False),
         sa.Column('last_login', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
@@ -47,9 +47,9 @@ def upgrade() -> None:
         sa.Column('current_streak', sa.Integer(), nullable=False),
         sa.Column('longest_streak', sa.Integer(), nullable=False),
         sa.Column('status', sa.Enum('active', 'inactive', 'suspended', name='customerstatus'), nullable=False),
-        sa.Column('joined_date', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('last_activity', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('joined_date', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
+        sa.Column('last_activity', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id')
@@ -65,7 +65,7 @@ def upgrade() -> None:
         sa.Column('gender', sa.String(length=10), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
         sa.Column('is_active', sa.Boolean(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['customer_id'], ['customers.id'], ),
         sa.PrimaryKeyConstraint('id')
@@ -81,7 +81,7 @@ def upgrade() -> None:
         sa.Column('points_at_upgrade', sa.Integer(), nullable=False),
         sa.Column('reason', sa.String(length=255), nullable=True),
         sa.Column('changed_by', sa.Integer(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.ForeignKeyConstraint(['changed_by'], ['users.id'], ),
         sa.ForeignKeyConstraint(['customer_id'], ['customers.id'], ),
         sa.PrimaryKeyConstraint('id')
@@ -101,7 +101,7 @@ def upgrade() -> None:
         sa.Column('metadata', sa.Text(), nullable=True),
         sa.Column('expires_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_active', sa.Boolean(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.ForeignKeyConstraint(['customer_id'], ['customers.id'], ),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id')
@@ -122,11 +122,11 @@ def upgrade() -> None:
         sa.Column('status', sa.Enum('active', 'inactive', 'out_of_stock', 'discontinued', name='rewardstatus'), nullable=False),
         sa.Column('stock_quantity', sa.Integer(), nullable=False),
         sa.Column('max_per_customer', sa.Integer(), nullable=False),
-        sa.Column('valid_from', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('valid_from', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('valid_until', sa.DateTime(timezone=True), nullable=True),
         sa.Column('terms_conditions', sa.Text(), nullable=True),
         sa.Column('is_featured', sa.Boolean(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
@@ -144,7 +144,7 @@ def upgrade() -> None:
         sa.Column('fulfilled_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('fulfilled_by', sa.Integer(), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.ForeignKeyConstraint(['customer_id'], ['customers.id'], ),
         sa.ForeignKeyConstraint(['fulfilled_by'], ['users.id'], ),
         sa.ForeignKeyConstraint(['reward_id'], ['rewards.id'], ),
@@ -161,9 +161,9 @@ def upgrade() -> None:
         sa.Column('benefit_value', sa.String(length=255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('is_active', sa.Boolean(), nullable=False),
-        sa.Column('valid_from', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('valid_from', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('valid_until', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_tier_benefits_id'), 'tier_benefits', ['id'], unique=False)
@@ -188,9 +188,9 @@ def upgrade() -> None:
         sa.Column('notes', sa.Text(), nullable=True),
         sa.Column('approved_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('approved_by', sa.Integer(), nullable=True),
-        sa.Column('joined_date', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('last_activity', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('joined_date', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
+        sa.Column('last_activity', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['approved_by'], ['users.id'], ),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
@@ -210,7 +210,7 @@ def upgrade() -> None:
         sa.Column('commission_amount', sa.DECIMAL(precision=15, scale=2), nullable=False),
         sa.Column('status', sa.String(length=50), nullable=False),
         sa.Column('metadata', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.ForeignKeyConstraint(['affiliate_id'], ['affiliates.id'], ),
         sa.ForeignKeyConstraint(['customer_id'], ['customers.id'], ),
         sa.PrimaryKeyConstraint('id')
@@ -234,7 +234,7 @@ def upgrade() -> None:
         sa.Column('paid_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('payment_reference', sa.String(length=100), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['affiliate_id'], ['affiliates.id'], ),
         sa.ForeignKeyConstraint(['approved_by'], ['users.id'], ),
@@ -256,7 +256,7 @@ def upgrade() -> None:
         sa.Column('processed_by', sa.Integer(), nullable=True),
         sa.Column('processed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['affiliate_id'], ['affiliates.id'], ),
         sa.ForeignKeyConstraint(['processed_by'], ['users.id'], ),
@@ -278,7 +278,7 @@ def upgrade() -> None:
         sa.Column('usage_count', sa.Integer(), nullable=False),
         sa.Column('last_used', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_by', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id')
@@ -308,7 +308,7 @@ def upgrade() -> None:
         sa.Column('sent_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('delivered_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('read_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.ForeignKeyConstraint(['customer_id'], ['customers.id'], ),
         sa.ForeignKeyConstraint(['template_id'], ['notification_templates.id'], ),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
@@ -330,7 +330,7 @@ def upgrade() -> None:
         sa.Column('processed', sa.Boolean(), nullable=False),
         sa.Column('processed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('error_message', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_whatsapp_webhooks_event_type'), 'whatsapp_webhooks', ['event_type'], unique=False)
@@ -356,7 +356,7 @@ def upgrade() -> None:
         sa.Column('is_recurring', sa.Boolean(), nullable=False),
         sa.Column('metadata', sa.Text(), nullable=True),
         sa.Column('created_by', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
         sa.ForeignKeyConstraint(['customer_id'], ['customers.id'], ),
@@ -384,7 +384,7 @@ def upgrade() -> None:
         sa.Column('max_promotions_per_day', sa.Integer(), nullable=False),
         sa.Column('last_processed', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_by', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('utc'::text, now())"), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
         sa.ForeignKeyConstraint(['template_id'], ['notification_templates.id'], ),
