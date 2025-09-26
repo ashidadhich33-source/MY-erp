@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     LOGIC_ERP_DATABASE_URL: str = Field(default="", description="Logic ERP database URL")
     LOGIC_ERP_API_KEY: str = Field(default="", description="Logic ERP API key")
 
+    # ERP Connection Settings (for MSSQL direct access)
+    ERP_HOST: str = Field(default="", description="ERP database host")
+    ERP_PORT: int = Field(default=1433, description="ERP database port")
+    ERP_DATABASE: str = Field(default="", description="ERP database name")
+    ERP_USERNAME: str = Field(default="", description="ERP database username")
+    ERP_PASSWORD: str = Field(default="", description="ERP database password")
+    ERP_DRIVER: str = Field(default="ODBC Driver 17 for SQL Server", description="ODBC driver name")
+
     @model_validator(mode='after')
     def assemble_cors_origins(self) -> 'Settings':
         if isinstance(self.BACKEND_CORS_ORIGINS, str):

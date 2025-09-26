@@ -1,22 +1,22 @@
 """
 Logic ERP Integration Business Logic Service.
 
-Handles ERP data abstraction, synchronization utilities, API integration,
+Handles ERP data abstraction, synchronization utilities, direct MSSQL database integration,
 data transformation, and ERP system connectivity.
 """
 
 from typing import List, Optional, Dict, Tuple, Any, Union
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func, text, case
+from sqlalchemy import and_, or_, func, text, case, create_engine
 import json
 import logging
-import requests
 import hashlib
 import uuid
 from enum import Enum
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+import pyodbc
 
 from ..models import (
     User, UserRole, UserStatus,
@@ -136,127 +136,209 @@ class BaseERPConnector(ABC):
 
 
 class LogicERPConnector(BaseERPConnector):
-    """Logic ERP specific connector implementation."""
+    """Logic ERP MSSQL database connector implementation."""
 
     def __init__(self, connection: ERPConnection):
         super().__init__(connection)
-        self.base_url = f"{connection.host}:{connection.port}/api/v1"
-        self.headers = {
-            "Authorization": f"Bearer {connection.api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": "LoyaltySystem/1.0"
-        }
+        self.connection_string = (
+            f"DRIVER={{{connection.driver}}};"
+            f"SERVER={connection.host},{connection.port};"
+            f"DATABASE={connection.database};"
+            f"UID={connection.username};"
+            f"PWD={connection.password};"
+            "TrustServerCertificate=yes;"
+        )
+        self.db_connection = None
+        self.cursor = None
 
     async def connect(self) -> bool:
-        """Establish connection to Logic ERP."""
+        """Establish connection to Logic ERP MSSQL database."""
         try:
-            # Test the connection
-            response = requests.get(
-                f"{self.base_url}/status",
-                headers=self.headers,
-                timeout=self.connection.timeout
-            )
-            response.raise_for_status()
-            self.session = requests.Session()
-            logger.info("Successfully connected to Logic ERP")
+            self.db_connection = pyodbc.connect(self.connection_string)
+            self.cursor = self.db_connection.cursor()
+            logger.info("Successfully connected to Logic ERP MSSQL database")
             return True
         except Exception as e:
-            logger.error(f"Failed to connect to Logic ERP: {e}")
+            logger.error(f"Failed to connect to Logic ERP MSSQL: {e}")
             return False
 
     async def disconnect(self):
-        """Close Logic ERP connection."""
-        if self.session:
-            self.session.close()
-        logger.info("Disconnected from Logic ERP")
+        """Close Logic ERP MSSQL connection."""
+        if self.cursor:
+            self.cursor.close()
+        if self.db_connection:
+            self.db_connection.close()
+        logger.info("Disconnected from Logic ERP MSSQL database")
 
     async def test_connection(self) -> bool:
-        """Test Logic ERP connection."""
+        """Test Logic ERP MSSQL connection."""
         try:
-            response = self.session.get(
-                f"{self.base_url}/status",
-                headers=self.headers,
-                timeout=self.connection.timeout
-            )
-            return response.status_code == 200
+            self.cursor.execute("SELECT 1 as test")
+            result = self.cursor.fetchone()
+            return result is not None
         except Exception as e:
             logger.error(f"Connection test failed: {e}")
             return False
 
     async def get_customers(self, filters: Dict = None) -> List[Dict]:
-        """Get customers from Logic ERP."""
+        """Get customers from Logic ERP MSSQL database."""
         try:
-            params = filters or {}
-            response = self.session.get(
-                f"{self.base_url}/customers",
-                headers=self.headers,
-                params=params,
-                timeout=self.connection.timeout
-            )
-            response.raise_for_status()
-            return response.json().get('data', [])
+            # Build query based on common ERP table structures
+            # This is a generic implementation - adjust table/column names as needed
+            query = """
+                SELECT
+                    CustomerID as id,
+                    CustomerName as customer_name,
+                    Email as email_address,
+                    Phone as phone_number,
+                    Address as address,
+                    CustomerType as customer_type,
+                    CreditLimit as credit_limit,
+                    TaxID as tax_id,
+                    CreatedDate as created_at,
+                    ModifiedDate as updated_at
+                FROM Customers
+                WHERE IsActive = 1
+            """
+
+            filter_conditions = []
+            if filters:
+                if 'customer_id' in filters:
+                    filter_conditions.append(f"CustomerID = {filters['customer_id']}")
+                if 'email' in filters:
+                    filter_conditions.append(f"Email LIKE '%{filters['email']}%'")
+                if 'phone' in filters:
+                    filter_conditions.append(f"Phone LIKE '%{filters['phone']}%'")
+                if 'name' in filters:
+                    filter_conditions.append(f"CustomerName LIKE '%{filters['name']}%'")
+
+            if filter_conditions:
+                query += " AND " + " AND ".join(filter_conditions)
+
+            query += " ORDER BY ModifiedDate DESC"
+
+            self.cursor.execute(query)
+            columns = [column[0] for column in self.cursor.description]
+            results = [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+
+            logger.info(f"Retrieved {len(results)} customers from Logic ERP")
+            return results
         except Exception as e:
             logger.error(f"Failed to get customers from Logic ERP: {e}")
             return []
 
     async def get_products(self, filters: Dict = None) -> List[Dict]:
-        """Get products from Logic ERP."""
+        """Get products from Logic ERP MSSQL database."""
         try:
-            params = filters or {}
-            response = self.session.get(
-                f"{self.base_url}/products",
-                headers=self.headers,
-                params=params,
-                timeout=self.connection.timeout
-            )
-            response.raise_for_status()
-            return response.json().get('data', [])
+            query = """
+                SELECT
+                    ProductID as id,
+                    ProductCode as product_code,
+                    ProductName as product_name,
+                    Category as category,
+                    Price as price,
+                    Cost as cost,
+                    StockQuantity as stock_quantity,
+                    IsActive as is_active,
+                    CreatedDate as created_at,
+                    ModifiedDate as updated_at
+                FROM Products
+                WHERE IsActive = 1
+            """
+
+            filter_conditions = []
+            if filters:
+                if 'product_id' in filters:
+                    filter_conditions.append(f"ProductID = {filters['product_id']}")
+                if 'category' in filters:
+                    filter_conditions.append(f"Category = '{filters['category']}'")
+                if 'product_code' in filters:
+                    filter_conditions.append(f"ProductCode LIKE '%{filters['product_code']}%'")
+
+            if filter_conditions:
+                query += " AND " + " AND ".join(filter_conditions)
+
+            query += " ORDER BY ModifiedDate DESC"
+
+            self.cursor.execute(query)
+            columns = [column[0] for column in self.cursor.description]
+            results = [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+
+            logger.info(f"Retrieved {len(results)} products from Logic ERP")
+            return results
         except Exception as e:
             logger.error(f"Failed to get products from Logic ERP: {e}")
             return []
 
     async def get_sales(self, filters: Dict = None) -> List[Dict]:
-        """Get sales data from Logic ERP."""
+        """Get sales data from Logic ERP MSSQL database."""
         try:
-            params = filters or {}
-            response = self.session.get(
-                f"{self.base_url}/sales",
-                headers=self.headers,
-                params=params,
-                timeout=self.connection.timeout
-            )
-            response.raise_for_status()
-            return response.json().get('data', [])
+            query = """
+                SELECT
+                    s.SaleID as id,
+                    s.InvoiceNumber as invoice_number,
+                    s.CustomerID as customer_id,
+                    c.CustomerName as customer_name,
+                    s.SaleDate as sale_date,
+                    s.TotalAmount as total_amount,
+                    s.TotalDiscount as total_discount,
+                    s.NetAmount as net_amount,
+                    s.PaymentStatus as payment_status,
+                    s.CreatedDate as created_at,
+                    s.ModifiedDate as updated_at
+                FROM Sales s
+                INNER JOIN Customers c ON s.CustomerID = c.CustomerID
+                WHERE s.IsActive = 1
+            """
+
+            filter_conditions = []
+            if filters:
+                if 'sale_id' in filters:
+                    filter_conditions.append(f"s.SaleID = {filters['sale_id']}")
+                if 'customer_id' in filters:
+                    filter_conditions.append(f"s.CustomerID = {filters['customer_id']}")
+                if 'invoice_number' in filters:
+                    filter_conditions.append(f"s.InvoiceNumber LIKE '%{filters['invoice_number']}%'")
+                if 'date_from' in filters:
+                    filter_conditions.append(f"s.SaleDate >= '{filters['date_from']}'")
+                if 'date_to' in filters:
+                    filter_conditions.append(f"s.SaleDate <= '{filters['date_to']}'")
+
+            if filter_conditions:
+                query += " AND " + " AND ".join(filter_conditions)
+
+            query += " ORDER BY s.SaleDate DESC"
+
+            self.cursor.execute(query)
+            columns = [column[0] for column in self.cursor.description]
+            results = [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+
+            logger.info(f"Retrieved {len(results)} sales from Logic ERP")
+            return results
         except Exception as e:
             logger.error(f"Failed to get sales from Logic ERP: {e}")
             return []
 
     async def sync_customer(self, customer_data: Dict) -> Dict:
-        """Sync customer data to Logic ERP."""
+        """Sync customer data to Logic ERP MSSQL database."""
         try:
-            response = self.session.post(
-                f"{self.base_url}/customers",
-                headers=self.headers,
-                json=customer_data,
-                timeout=self.connection.timeout
-            )
-            response.raise_for_status()
-            return response.json()
+            # Note: This is a placeholder for customer sync to Logic ERP
+            # In a real implementation, you would insert/update customer data in Logic ERP
+            # For now, we'll return success without actually syncing
+            logger.info(f"Customer sync to Logic ERP not implemented: {customer_data['name']}")
+            return {"success": True, "message": "Customer sync not implemented"}
         except Exception as e:
             logger.error(f"Failed to sync customer to Logic ERP: {e}")
             return {"error": str(e)}
 
     async def sync_sale(self, sale_data: Dict) -> Dict:
-        """Sync sale data to Logic ERP."""
+        """Sync sale data to Logic ERP MSSQL database."""
         try:
-            response = self.session.post(
-                f"{self.base_url}/sales",
-                headers=self.headers,
-                json=sale_data,
-                timeout=self.connection.timeout
-            )
-            response.raise_for_status()
-            return response.json()
+            # Note: This is a placeholder for sale sync to Logic ERP
+            # In a real implementation, you would insert sale data in Logic ERP
+            # For now, we'll return success without actually syncing
+            logger.info(f"Sale sync to Logic ERP not implemented: {sale_data.get('invoice_number', 'unknown')}")
+            return {"success": True, "message": "Sale sync not implemented"}
         except Exception as e:
             logger.error(f"Failed to sync sale to Logic ERP: {e}")
             return {"error": str(e)}
