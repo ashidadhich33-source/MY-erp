@@ -23,6 +23,7 @@ class Customer(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    erp_id = Column(String(100), nullable=True)  # Logic ERP CustomerID
     tier = Column(Enum(CustomerTier), default=CustomerTier.BRONZE, nullable=False)
     total_points = Column(Integer, default=0, nullable=False)
     lifetime_points = Column(Integer, default=0, nullable=False)
@@ -31,6 +32,8 @@ class Customer(Base):
     status = Column(Enum(CustomerStatus), default=CustomerStatus.ACTIVE, nullable=False)
     joined_date = Column(DateTime(timezone=True), server_default=func.now())
     last_activity = Column(DateTime(timezone=True), server_default=func.now())
+    last_sync = Column(DateTime(timezone=True), nullable=True)  # Last sync with Logic ERP
+    data_hash = Column(String(64), nullable=True)  # Hash for change detection
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -70,7 +73,7 @@ class CustomerTierHistory(Base):
     new_tier = Column(Enum(CustomerTier), nullable=False)
     points_at_upgrade = Column(Integer, nullable=False)
     reason = Column(String(255))  # "points_threshold", "manual_upgrade", etc.
-    changed_by = Column(Integer, ForeignKey("users.id"))  # Admin who made the change
+    changed_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Admin who made the change
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

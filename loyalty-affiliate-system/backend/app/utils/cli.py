@@ -71,7 +71,12 @@ def create_migration():
     from app.core.database import Base
 
     # Import all models to ensure they are registered
-    from app.models import *
+    from app.models.user import User, UserRole, UserStatus
+    from app.models.customer import Customer, CustomerKid, CustomerTierHistory, CustomerTier, CustomerStatus
+    from app.models.loyalty import LoyaltyTransaction, Reward, RewardRedemption, TierBenefit, TransactionType, TransactionSource, RewardStatus
+    from app.models.affiliate import Affiliate, CustomerReferral, AffiliateCommission, PayoutRequest, AffiliateStatus, CommissionStatus
+    from app.models.whatsapp import WhatsAppMessage, NotificationTemplate, WhatsAppWebhook, MessageType, MessageDirection, MessageStatus, TemplateCategory
+    from app.models.birthday import BirthdayPromotion, BirthdaySchedule, PromotionStatus
 
     click.echo("Creating new migration...")
     alembic_cfg = Config("alembic.ini")

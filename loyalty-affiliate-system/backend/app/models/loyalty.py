@@ -41,6 +41,7 @@ class LoyaltyTransaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    erp_sale_id = Column(String(100), nullable=True)  # Logic ERP OrderID
     points = Column(Integer, nullable=False)  # Can be negative for redemptions
     transaction_type = Column(Enum(TransactionType), nullable=False)
     source = Column(Enum(TransactionSource), nullable=False)
