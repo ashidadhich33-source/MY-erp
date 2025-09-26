@@ -15,76 +15,101 @@ A comprehensive loyalty program and affiliate management system with WhatsApp in
 ### Technical Features
 - **Real-time Sync**: Automatic data synchronization between systems
 - **API-First Architecture**: RESTful APIs with comprehensive documentation
-- **Scalable Design**: Docker-based deployment with load balancing
+- **Local Development**: Direct PostgreSQL and MSSQL integration for local development
 - **Security**: JWT authentication, role-based access control, data encryption
-- **Monitoring**: Real-time monitoring with Prometheus and Grafana
 - **Testing**: Comprehensive test suite with unit and integration tests
 
 ## 📋 Prerequisites
 
-- Docker and Docker Compose
-- Python 3.11+ (for development)
-- Node.js 18+ (for development)
-- PostgreSQL 15+ (for loyalty system database)
-- Microsoft SQL Server (for Logic ERP data source)
-- Redis 7+ (for caching and sessions)
+- **Python 3.11+** (for backend development)
+- **Node.js 18+** (for frontend development)
+- **PostgreSQL 15+** (for loyalty system database - installed locally)
+- **Microsoft SQL Server** (for Logic ERP data source - running locally)
+- **Git** (for version control)
 
 ## 🛠️ Quick Start
 
-### Development Setup
+### Local Development Setup
 
-1. **Clone the repository**
+1. **Install PostgreSQL locally**
+   ```bash
+   # Ubuntu/Debian
+   sudo apt update
+   sudo apt install postgresql postgresql-contrib
+
+   # Create database and user
+   sudo -u postgres psql
+   CREATE DATABASE loyalty_db;
+   CREATE USER loyalty_user WITH PASSWORD 'loyalty_password';
+   GRANT ALL PRIVILEGES ON DATABASE loyalty_db TO loyalty_user;
+   \q
+   ```
+
+2. **Clone the repository**
    ```bash
    git clone <repository-url>
    cd loyalty-affiliate-system
    ```
 
-2. **Set up environment variables**
+3. **Set up environment variables**
    ```bash
+   # Frontend environment is already created
+   # Backend .env.example should be copied and configured
    cp backend/.env.example backend/.env
-   cp frontend/.env.example frontend/.env
-   # Edit the environment files with your configuration
+   # Edit backend/.env with your local database settings
    ```
 
-3. **Start the development environment**
+4. **Install Python dependencies**
    ```bash
-   docker-compose -f docker-compose.dev.yml up -d
+   cd backend
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   cd ..
    ```
 
-4. **Run database migrations**
+5. **Install Node.js dependencies**
    ```bash
-   docker-compose exec backend alembic upgrade head
+   cd frontend
+   npm install
+   cd ..
    ```
 
-5. **Access the applications**
+6. **Run database migrations**
+   ```bash
+   cd backend
+   source venv/bin/activate
+   alembic upgrade head
+   cd ..
+   ```
+
+7. **Start the backend server**
+   ```bash
+   cd backend
+   source venv/bin/activate
+   python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+
+8. **Start the frontend development server**
+   ```bash
+   # New terminal
+   cd frontend
+   npm run dev
+   ```
+
+9. **Access the applications**
    - Backend API: http://localhost:8000
    - Frontend: http://localhost:3000
    - API Documentation: http://localhost:8000/docs
-
-### Production Deployment
-
-1. **Configure environment**
-   ```bash
-   cp .env.example .env.production
-   # Edit with your production settings
-   ```
-
-2. **Deploy to production**
-   ```bash
-   ./deploy.sh deploy
-   ```
-
-3. **Monitor deployment**
-   ```bash
-   docker-compose logs -f
-   ```
 
 ## 🧪 Testing
 
 ### Run Tests
 
 ```bash
-# Run all tests
+# Activate virtual environment and run tests
+cd backend
+source venv/bin/activate
 pytest
 
 # Run with coverage
@@ -103,42 +128,43 @@ pytest tests/ -m performance
 ### Test Categories
 
 - **Unit Tests**: Individual function and method testing
-- **Integration Tests**: Component interaction testing
+- **Integration Tests**: Component interaction testing with real databases
 - **Performance Tests**: Load and stress testing
 - **Security Tests**: Authentication and authorization testing
 
-## 📊 Monitoring
+### Test Database Setup
 
-### Access Monitoring Dashboards
+For running tests, you may want to use a separate test database:
 
-- **Grafana**: http://localhost:3001 (admin/admin)
-- **Prometheus**: http://localhost:9090
-- **Application Health**: http://localhost:8000/health
+```bash
+# Create test database
+sudo -u postgres psql
+CREATE DATABASE loyalty_test_db;
+CREATE USER loyalty_test_user WITH PASSWORD 'loyalty_test_password';
+GRANT ALL PRIVILEGES ON DATABASE loyalty_test_db TO loyalty_test_user;
+\q
 
-### Key Metrics
-
-- Customer acquisition and retention rates
-- Loyalty points issued and redeemed
-- Affiliate conversion rates
-- WhatsApp message delivery and read rates
-- System performance and error rates
+# Update .env for testing
+DATABASE_URL=postgresql://loyalty_test_user:loyalty_test_password@localhost:5432/loyalty_test_db
+```
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
-Key configuration options:
+Key configuration options in `backend/.env`:
 
 ```bash
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/loyalty_db
+# Database (Local PostgreSQL)
+DATABASE_URL=postgresql://loyalty_user:loyalty_password@localhost:5432/loyalty_db
 
 # Security
-SECRET_KEY=your-super-secret-key
+SECRET_KEY=your-super-secret-key-change-this-in-production
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+ENVIRONMENT=development
 
-# Logic ERP Integration (MSSQL)
-ERP_HOST=erp_db
+# Logic ERP Integration (Local MSSQL)
+ERP_HOST=localhost
 ERP_PORT=1433
 ERP_DATABASE=master
 ERP_USERNAME=sa
@@ -147,10 +173,16 @@ ERP_DRIVER=ODBC Driver 17 for SQL Server
 
 # WhatsApp Integration (optional)
 WHATSAPP_ACCESS_TOKEN=your-whatsapp-token
+WHATSAPP_VERIFY_TOKEN=your-verify-token
 
-# Email
+# Email Configuration (optional)
 EMAIL_HOST=smtp.gmail.com
 EMAIL_USERNAME=your-email@gmail.com
+EMAIL_PASSWORD=your-app-password
+EMAIL_FROM=noreply@yourcompany.com
+
+# Redis (optional - for caching)
+REDIS_URL=redis://localhost:6379
 ```
 
 ### Data Mapping
@@ -228,26 +260,6 @@ curl -X POST http://localhost:8000/api/v1/loyalty/award \
 - SQL injection protection
 - XSS protection
 
-## 📈 Scaling
-
-### Horizontal Scaling
-
-```bash
-# Scale backend services
-docker-compose up -d --scale backend=3
-
-# Scale frontend services
-docker-compose up -d --scale frontend=2
-```
-
-### Database Scaling
-
-```bash
-# Enable read replicas
-# Configure connection pooling
-# Set up database sharding for large datasets
-```
-
 ## 🛠️ Development
 
 ### Project Structure
@@ -257,22 +269,39 @@ loyalty-affiliate-system/
 ├── backend/                 # FastAPI backend (PostgreSQL)
 │   ├── app/                # Main application with Logic ERP integration
 │   ├── tests/              # Test files
-│   └── requirements.txt    # Python dependencies (includes pyodbc)
+│   ├── requirements.txt    # Python dependencies
+│   ├── alembic/            # Database migrations
+│   └── venv/               # Python virtual environment
 ├── frontend/               # React frontend
 │   ├── src/               # Source code
-│   └── package.json       # Node dependencies
-├── monitoring/             # Monitoring configuration
-├── docker-compose.yml      # Multi-database deployment (PostgreSQL + MSSQL)
-├── erp_db/                 # Logic ERP MSSQL data (mounted volume)
-└── deploy.sh              # Deployment script
+│   ├── public/            # Static assets
+│   ├── package.json       # Node dependencies
+│   └── .env               # Frontend environment variables
+└── updated-project-instructions.md
 ```
 
-### Adding New Features
+### Development Workflow
 
-1. **Backend**: Add new endpoints in `app/api/v1/endpoints/`
-2. **Frontend**: Create new components in `src/components/`
-3. **Tests**: Add tests in `tests/` directory
-4. **Documentation**: Update API docs and README
+1. **Backend Development**:
+   - Edit Python files in `backend/app/`
+   - Add new API endpoints in `backend/app/api/v1/endpoints/`
+   - Update database models in `backend/app/models/`
+   - Add business logic in `backend/app/services/`
+
+2. **Frontend Development**:
+   - Edit React components in `frontend/src/components/`
+   - Add new pages in `frontend/src/pages/`
+   - Update API calls in `frontend/src/services/api.js`
+   - Modify state management in `frontend/src/store/`
+
+3. **Testing**:
+   - Add unit tests in `backend/tests/`
+   - Run tests: `cd backend && source venv/bin/activate && pytest`
+   - Test API endpoints using the documentation at `/docs`
+
+4. **Database Changes**:
+   - Create new migrations: `cd backend && source venv/bin/activate && alembic revision --autogenerate -m "description"`
+   - Apply migrations: `alembic upgrade head`
 
 ### Code Style
 
@@ -281,36 +310,52 @@ loyalty-affiliate-system/
 - **Type Hints**: Comprehensive type annotations
 - **Documentation**: Docstrings for all functions
 
+### Adding New Features
+
+1. **Backend**: Add new endpoints in `app/api/v1/endpoints/`
+2. **Frontend**: Create new components in `src/components/`
+3. **Tests**: Add tests in `tests/` directory
+4. **Documentation**: Update API docs and README
+
 ## 🚨 Troubleshooting
 
 ### Common Issues
 
 1. **Database Connection Error**
-   - Check DATABASE_URL configuration
-   - Ensure PostgreSQL is running
-   - Verify database credentials
+   - Check DATABASE_URL configuration in `backend/.env`
+   - Ensure PostgreSQL service is running: `sudo systemctl status postgresql`
+   - Verify database credentials and database exists
 
 2. **ERP Integration Issues**
-   - Verify ERP_HOST and ERP_API_KEY
-   - Check network connectivity
-   - Review error logs in monitoring
+   - Verify ERP_HOST is set to `localhost` in `backend/.env`
+   - Check Logic ERP MSSQL is running on port 1433
+   - Ensure ERP credentials are correct (default: sa/ATPL@123)
 
 3. **WhatsApp API Errors**
-   - Validate WHATSAPP_ACCESS_TOKEN
+   - Validate WHATSAPP_ACCESS_TOKEN in `backend/.env`
    - Check API quotas and limits
    - Verify phone number format
 
-4. **Performance Issues**
-   - Check system resources
-   - Review slow queries in logs
-   - Consider database optimization
+4. **Port Already in Use**
+   - Backend: Change port in uvicorn command or kill process using port 8000
+   - Frontend: Use `npm run dev -- --port 3001` to use different port
 
-### Support
+5. **Python Dependencies Issues**
+   - Ensure virtual environment is activated: `source venv/bin/activate`
+   - Reinstall requirements: `pip install -r requirements.txt`
+   - Check Python version: `python --version` (should be 3.11+)
 
-- Check the logs: `docker-compose logs -f`
-- Monitor metrics: Grafana dashboard
-- Review documentation: API docs at `/docs`
-- Community support: GitHub issues
+6. **Node.js Dependencies Issues**
+   - Clear npm cache: `npm cache clean --force`
+   - Delete node_modules: `rm -rf node_modules package-lock.json`
+   - Reinstall: `npm install`
+
+### Support and Logs
+
+- **Backend Logs**: Check console output when running uvicorn server
+- **Database Logs**: Check PostgreSQL logs: `sudo tail -f /var/log/postgresql/postgresql-15-main.log`
+- **API Documentation**: Review API docs at `http://localhost:8000/docs`
+- **Health Check**: Test system health at `http://localhost:8000/health`
 
 ## 📄 License
 
@@ -319,19 +364,50 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes and test them thoroughly
 4. Add tests for new functionality
-5. Run the test suite
-6. Submit a pull request
+5. Run the test suite: `cd backend && source venv/bin/activate && pytest`
+6. Commit your changes (`git commit -m 'Add amazing feature'`)
+7. Push to the branch (`git push origin feature/amazing-feature`)
+8. Open a Pull Request
 
-## 📞 Contact
+### Development Guidelines
+
+- Follow PEP 8 for Python code
+- Use ESLint for JavaScript/React code
+- Write comprehensive tests for new features
+- Update documentation for API changes
+- Use meaningful commit messages
+- Ensure all tests pass before submitting PR
+
+## 📞 Contact & Support
 
 For support and questions:
-- Email: support@yourcompany.com
-- Documentation: https://docs.yourcompany.com
-- API Documentation: http://localhost:8000/docs
+- **API Documentation**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+- **Documentation**: Check this README and the `/docs` endpoint
+- **Issues**: Report bugs and request features on GitHub
+
+### Getting Help
+
+1. **Check the logs**: Review console output and database logs
+2. **API Documentation**: Use the interactive docs at `/docs`
+3. **Health Check**: Verify system status at `/health/detailed`
+4. **Test Environment**: Create a separate test database for debugging
 
 ---
 
-**Happy coding! 🎉**
+## 🎉 **Getting Started**
+
+Your Loyalty & Affiliate Management System is now ready for local development!
+
+### **Next Steps:**
+
+1. **Start Development**: Follow the setup instructions above
+2. **Explore Features**: Check out the API documentation at `/docs`
+3. **Customize**: Modify the system to fit your business needs
+4. **Test Thoroughly**: Use the comprehensive test suite
+5. **Deploy**: When ready, consider containerized deployment for production
+
+**Happy coding! 🚀**
