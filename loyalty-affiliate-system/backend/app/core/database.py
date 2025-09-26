@@ -11,12 +11,10 @@ class Base(DeclarativeBase):
 # Create SQLAlchemy engine
 engine = create_engine(
     settings.SQLALCHEMY_DATABASE_URI,
-    echo=True,  # Set to False in production
+    echo=False,  # Disabled for production - enable only for debugging
     pool_pre_ping=True,
     pool_recycle=300,
-    connect_args={
-        "check_same_thread": False,
-    }
+    # Remove SQLite-specific settings - let SQLAlchemy handle database-specific settings
 )
 
 # Create SessionLocal class

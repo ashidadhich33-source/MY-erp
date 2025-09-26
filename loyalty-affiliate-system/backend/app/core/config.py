@@ -1,24 +1,25 @@
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl, computed_field, model_validator
+from pydantic import AnyHttpUrl, computed_field, model_validator, Field
+import secrets
 
 
 class Settings(BaseSettings):
     # API Settings
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = "your-secret-key-change-this-in-production"
+    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     SERVER_NAME: str = "localhost"
     SERVER_HOST: AnyHttpUrl = "http://localhost"
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
 
     # Database Settings
-    DATABASE_URL: str = "mssql+pyodbc://username:password@localhost/loyalty_db?driver=ODBC+Driver+17+for+SQL+Server"
+    DATABASE_URL: str = Field(..., description="Database connection URL")
 
     # WhatsApp Settings
     WHATSAPP_API_URL: str = "https://graph.facebook.com/v17.0"
-    WHATSAPP_ACCESS_TOKEN: str = ""
-    WHATSAPP_VERIFY_TOKEN: str = "your-whatsapp-verify-token"
+    WHATSAPP_ACCESS_TOKEN: str = Field(default="", description="WhatsApp API access token")
+    WHATSAPP_VERIFY_TOKEN: str = Field(default_factory=lambda: secrets.token_hex(32))
 
     # Redis Settings (for caching and sessions)
     REDIS_URL: str = "redis://localhost:6379"
@@ -33,8 +34,8 @@ class Settings(BaseSettings):
     EMAILS_FROM_NAME: Optional[str] = None
 
     # Logic ERP Settings
-    LOGIC_ERP_DATABASE_URL: str = ""
-    LOGIC_ERP_API_KEY: str = ""
+    LOGIC_ERP_DATABASE_URL: str = Field(default="", description="Logic ERP database URL")
+    LOGIC_ERP_API_KEY: str = Field(default="", description="Logic ERP API key")
 
     @model_validator(mode='after')
     def assemble_cors_origins(self) -> 'Settings':
@@ -55,9 +56,10 @@ class Settings(BaseSettings):
     def SQLALCHEMY_DATABASE_URI(self) -> str:
         return self.DATABASE_URL
 
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
+    model_config = {
+        "case_sensitive": True,
+        "env_file": ".env"
+    }
 
 
 settings = Settings()

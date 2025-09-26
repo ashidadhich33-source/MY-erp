@@ -97,7 +97,7 @@ spec:
       - name: frontend
         image: loyalty-frontend:latest
         ports:
-        - containerPort: 3000
+        - containerPort: 80
           name: http
         env:
         - name: REACT_APP_API_BASE_URL
@@ -208,7 +208,7 @@ spec:
   ports:
   - name: http
     port: 80
-    targetPort: 3000
+    targetPort: 80
   type: ClusterIP
 
 ---
@@ -253,7 +253,7 @@ metadata:
   labels:
     app: loyalty-system
 data:
-  DATABASE_URL: "postgresql://loyalty_user:loyalty_password@postgres:5432/loyalty_db"
+  DATABASE_URL: "mssql+pyodbc://loyalty_user:loyalty_password@sqlserver:1433/loyalty_db?driver=ODBC+Driver+17+for+SQL+Server"
   REDIS_URL: "redis://redis:6379"
   ENVIRONMENT: "production"
   LOG_LEVEL: "INFO"
@@ -267,8 +267,10 @@ metadata:
     app: loyalty-system
 type: Opaque
 data:
-  database-url: cG9zdGdyZXM6Ly9sb3lhbHR5X3VzZXI6bG95YWx0eV9wYXNzd29yZEBwb3N0Z3JlczoxNDMyL2xveWFsdHlfZGI=
-  redis-url: cmVkaXM6Ly9yZWRpczoxOTM3
-  secret-key: eW91ci1zdXBlci1zZWNyZXQta2V5LWNoYW5nZS10aGlzLWluLXByb2R1Y3Rpb24=
-  erp-api-key: eW91ci1lcnAtYXBpLWtleQ==
-  whatsapp-token: eW91ci13aGF0c2FwcC10b2tlbg==
+  # Note: These are base64 encoded placeholder values
+  # Replace with actual secrets in production
+  database-url: bXNzcWwrUHlvZGJjOi8vbG95YWx0eV91c2VyOmxveWFsdHlfcGFzc3dvcmRAc3Fsc2VydmVyOjE0MzMvbG95YWx0eV9kYj9kcml2ZXI9T0RCQytEcml2ZXIrMTcrZm9yK1NRTStTZXJ2ZXI=
+  redis-url: cmVkaXM6Ly9yZWRpczo2Mzc5
+  secret-key: Y2hhbmdlLW1lLWFuZC11c2UtZW52aXJvbm1lbnQtdmFyaWFibGVzLWluLXByb2R1Y3Rpb24=
+  erp-api-key: Y2hhbmdlLW1lLWFuZC11c2UtZW52aXJvbm1lbnQtdmFyaWFibGVzLWluLXByb2R1Y3Rpb24=
+  whatsapp-token: Y2hhbmdlLW1lLWFuZC11c2UtZW52aXJvbm1lbnQtdmFyaWFibGVzLWluLXByb2R1Y3Rpb24=
