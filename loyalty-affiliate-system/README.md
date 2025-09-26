@@ -28,12 +28,23 @@ loyalty-affiliate-system/
 
 ## 🚀 Quick Start
 
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- Microsoft SQL Server with ODBC Driver
+
 ### Backend Setup
 ```bash
 cd backend
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
+# Set up database
+python run_cli.py init-db
+python run_cli.py seed-data
+
+# Run the API
 uvicorn app.main:app --reload
 ```
 
@@ -42,6 +53,15 @@ uvicorn app.main:app --reload
 cd frontend
 npm install
 npm run dev
+```
+
+### Database Setup
+```bash
+# Initialize database tables
+python run_cli.py init-db
+
+# Populate with sample data
+python run_cli.py seed-data
 ```
 
 ## 🔧 Features
